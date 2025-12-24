@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "TradingView Smart Logger",
+  "version": "1.0",
+  "description": "TradingView'da kopyalanan çizim nesnelerini otomatik loglar.",
+  "permissions": [
+    "clipboardRead",
+    "storage",
+    "notifications"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.tradingview.com/chart/*"],
+      "js": ["content.js"]
+    }
+  ]
+}

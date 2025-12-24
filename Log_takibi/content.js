@@ -1,4 +1,4 @@
-// TradingView Activity Logger - Toolbar & UI Canlı Takip (v5.0)
+// TradingView Activity Logger - Tam Odaklanma Modu (v7.0)
 //
 
 let currentSymbol = "";
@@ -6,17 +6,30 @@ let lastLogTime = 0;
 let drawingMode = false;
 let checkInterval = null;
 
+// --- KESİN ODAK KONTROLÜ ---
+// Sayfa gerçekten kullanıcının odağında mı? (Tıklanmış ve aktif mi?)
+function isUserActive() {
+    return document.hasFocus(); 
+}
+
 // --- GÜVENLİ LOG GÖNDERME ---
 function sendLog(action, details) {
-  if (!chrome.runtime?.id) return; // Bağlantı kontrolü
+  // 1. KURAL: Uzantı canlı mı?
+  if (!chrome.runtime?.id) return;
+  
+  // 2. KURAL (EN ÖNEMLİSİ): Kullanıcı bu sayfaya odaklanmış mı?
+  // Eğer kullanıcı başka sekmedeyse veya tarayıcı simge durumundaysa ASLA log atma.
+  if (!isUserActive()) {
+      // İstisna: Eğer çizim yapılıyorsa (mouse basılıysa) loga izin ver
+      if (!drawingMode) return;
+  }
 
   const now = Date.now();
-  if (now - lastLogTime < 500) return; // Spam koruması
+  if (now - lastLogTime < 1000) return; // 1 saniye spam koruması
   lastLogTime = now;
 
   const price = extractPrice();
   
-  // Eğer sembol boşsa, bulmaya çalış
   if (!currentSymbol) {
       currentSymbol = findActiveSymbol();
   }
@@ -36,24 +49,12 @@ function sendLog(action, details) {
   } catch (e) { /* Sessiz hata */ }
 }
 
-// --- EN ÖNEMLİ KISIM: SEMBOLÜ BULMA ---
+// --- SEMBOLÜ BULMA (TOOLBAR ÖNCELİKLİ) ---
 function findActiveSymbol() {
-  // 1. Yöntem: Sol üstteki Arama Butonunun içindeki yazı (En Garanti)
   const toolbarBtn = document.getElementById('header-toolbar-symbol-search');
   if (toolbarBtn && toolbarBtn.innerText.trim().length > 0) {
       return toolbarBtn.innerText.trim();
   }
-
-  // 2. Yöntem: URL Parametresi
-  try {
-    const urlParams = new URLSearchParams(window.location.search);
-    const symbolParam = urlParams.get('symbol');
-    if (symbolParam) {
-      return symbolParam.includes(':') ? symbolParam.split(':')[1] : symbolParam;
-    }
-  } catch(e) {}
-
-  // 3. Yöntem: Sayfa Başlığı (Fallback)
   return document.title.split(' ')[0];
 }
 
@@ -62,98 +63,111 @@ function extractPrice() {
   return match ? match[0] : "-";
 }
 
-// --- DEĞİŞİKLİKLERİ YAKALA (CORE LOGIC) ---
+// --- DEĞİŞİKLİK KONTROLÜ ---
 function checkChanges() {
+  // Kullanıcı sayfada değilse işlemciyi yorma, çık.
+  if (!isUserActive()) return;
+
   const detectedSymbol = findActiveSymbol();
 
-  // Sembol geçerli mi ve değişti mi?
   if (detectedSymbol && 
       detectedSymbol !== "TradingView" && 
-      detectedSymbol !== "Yükleniyor..." &&
+      detectedSymbol !== "Yükleniyor..." && 
       detectedSymbol !== currentSymbol) {
       
-      // Eski sembol varsa değişim logu at
       if (currentSymbol !== "") {
           sendLog('Sembol Değişti', { eski: currentSymbol, yeni: detectedSymbol });
+      } else {
+          sendLog('Oturum Başladı', { mesaj: `${detectedSymbol} aktif.` });
       }
-      
       currentSymbol = detectedSymbol;
-      
-      // Yeni oturumu 1 saniye sonra başlat (Grafik verileri otursun)
-      setTimeout(() => {
-          sendLog('Oturum Başladı', { mesaj: `${currentSymbol} grafiği yüklendi.` });
-      }, 1000);
   }
 }
 
-// --- OBSERVER (GÖZLEMCİ) KURULUMU ---
-function startObservers() {
-  // 1. ZAMANLAYICI: Her 1 saniyede bir kontrol et (En temiz çözüm)
-  if (checkInterval) clearInterval(checkInterval);
-  checkInterval = setInterval(checkChanges, 1000);
-
-  // 2. TOOLBAR İZLEYİCİSİ: Sembol kutusundaki metin değişimini anında yakala
-  const toolbarBtn = document.getElementById('header-toolbar-symbol-search');
-  if (toolbarBtn) {
-      const toolbarObserver = new MutationObserver(checkChanges);
-      toolbarObserver.observe(toolbarBtn, { childList: true, subtree: true, characterData: true });
-  }
-
-  // 3. DOM İZLEYİCİSİ: Çizim ve İndikatörler için
-  const domObserver = new MutationObserver((mutations) => {
-    if (!chrome.runtime?.id) return;
-
-    mutations.forEach((mutation) => {
-      mutation.addedNodes.forEach((node) => {
-        if (node.nodeType !== 1) return;
-
-        // İndikatör Yakalama
-        // TradingView'da indikatör isimleri genellikle bu data-id ile gelir
-        if (node.querySelector && node.querySelector('[data-qa-id="legend-source-title"]')) {
-            const text = node.innerText.split('\n')[0];
-            // Ana hisse senedi ismini indikatör sanmasın diye kontrol
-            if (text && text !== currentSymbol && !text.includes(currentSymbol)) {
-                sendLog('İndikatör', { isim: text });
-            }
+// --- GÖZLEMCİLERİ YÖNET ---
+function manageObservers() {
+    // Odaklanma durumuna göre zamanlayıcıyı başlat/durdur
+    if (isUserActive()) {
+        if (!checkInterval) {
+            checkInterval = setInterval(checkChanges, 1000);
+            console.log("Takip Başladı (Odaklandı)");
+            // Odaklanınca hemen bir kontrol et
+            checkChanges();
         }
-
-        // Çizim Paneli Yakalama (Floating Toolbar)
-        if (node.classList && (node.classList.contains('tv-floating-toolbar') || node.getAttribute('data-name') === 'floating-toolbar')) {
-             sendLog('Çizim', { tur: 'Grafik Düzenleme' });
+    } else {
+        if (checkInterval) {
+            clearInterval(checkInterval);
+            checkInterval = null;
+            console.log("Takip Durdu (Odak Kayboldu)");
         }
-      });
+    }
+}
+
+// --- BAŞLATMA VE OLAY DİNLEYİCİLERİ ---
+function startSystem() {
+    // 1. Pencere Odaklanma Olayları (Focus/Blur)
+    window.addEventListener('focus', manageObservers);
+    window.addEventListener('blur', manageObservers);
+    
+    // İlk açılış kontrolü
+    manageObservers();
+
+    // 2. Toolbar Değişimini İzle (Sadece odaklıyken çalışır)
+    const toolbarBtn = document.getElementById('header-toolbar-symbol-search');
+    if (toolbarBtn) {
+        const toolbarObserver = new MutationObserver(() => {
+            if (isUserActive()) checkChanges();
+        });
+        toolbarObserver.observe(toolbarBtn, { childList: true, subtree: true, characterData: true });
+    }
+
+    // 3. DOM (Çizim/İndikatör) İzleyici
+    const domObserver = new MutationObserver((mutations) => {
+        if (!chrome.runtime?.id || !isUserActive()) return;
+
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                if (node.nodeType !== 1) return;
+
+                // İndikatör
+                if (node.querySelector && node.querySelector('[data-qa-id="legend-source-title"]')) {
+                    const text = node.innerText.split('\n')[0];
+                    if (text && !text.includes(currentSymbol)) {
+                        sendLog('İndikatör', { isim: text });
+                    }
+                }
+                // Çizim Paneli
+                if (node.classList && (node.classList.contains('tv-floating-toolbar') || node.getAttribute('data-name') === 'floating-toolbar')) {
+                    sendLog('Çizim', { tur: 'Grafik İşlemi' });
+                }
+            });
+        });
     });
-  });
+    domObserver.observe(document.body, { childList: true, subtree: true });
 
-  domObserver.observe(document.body, { childList: true, subtree: true });
+    // 4. Mouse Takibi
+    document.addEventListener('mousedown', () => {
+        if (window.getComputedStyle(document.body).cursor === 'crosshair') {
+            drawingMode = true;
+        }
+    });
 
-  // 4. MOUSE İMLECİ İLE ÇİZİM TEYİDİ
-  document.addEventListener('mousedown', () => {
-      const cursor = window.getComputedStyle(document.body).cursor;
-      if (cursor === 'crosshair') drawingMode = true;
-  });
-
-  document.addEventListener('mouseup', () => {
-      if (drawingMode) {
-          setTimeout(() => {
-              const cursor = window.getComputedStyle(document.body).cursor;
-              if (cursor !== 'crosshair') { // İmleç normale döndüyse çizim bitmiştir
-                  sendLog('Çizim', { tur: 'Teknik Çizim' });
-                  drawingMode = false;
-              }
-          }, 200);
-      }
-  });
+    document.addEventListener('mouseup', () => {
+        if (drawingMode) {
+            // Çizim biterken odak gitse bile kaydetmesi için kısa gecikme
+            setTimeout(() => {
+                if (window.getComputedStyle(document.body).cursor !== 'crosshair') {
+                    sendLog('Çizim', { tur: 'Teknik Çizim' });
+                    drawingMode = false;
+                }
+            }, 200);
+        }
+    });
 }
 
-// --- BAŞLATMA ---
-setTimeout(() => {
-  currentSymbol = findActiveSymbol();
-  if (currentSymbol && currentSymbol !== "TradingView") {
-      sendLog('Oturum Başladı', { mesaj: `${currentSymbol} ile başlandı.` });
-  }
-  startObservers();
-}, 2500); // TradingView ağır yüklendiği için biraz daha bekle
+// 2 saniye bekle ve başlat
+setTimeout(startSystem, 2000);
+// TradingView ağır yüklendiği için biraz daha bekle
 // TradingView Activity Logger - Geliştirilmiş Content Script (Robust Version)
 //
 /*
