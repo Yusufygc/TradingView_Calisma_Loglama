@@ -135,16 +135,110 @@ function checkSymbolChange() {
   }, 1500);
 }
 
-// ==================== NOT BİLDİRİMİ ====================
+// ==================== SON GÖRÜNTÜLEME & NOT BİLDİRİMİ ====================
 
 async function checkForExistingNote(symbol) {
   try {
-    const result = await chrome.storage.local.get(['stockNotes']);
+    const result = await chrome.storage.local.get(['stockNotes', 'stockLastViews']);
     const notes = result.stockNotes || {};
+    const lastViews = result.stockLastViews || {};
 
-    if (notes[symbol]) {
-      showToast(`📝 "${symbol}" için notunuz var`, notes[symbol].note);
+    const currentPrice = extractCurrentPrice();
+    const messages = [];
+
+    // Son görüntüleme kontrolü
+    if (lastViews[symbol]) {
+      const lastView = lastViews[symbol];
+      const lastDate = new Date(lastView.date).toLocaleDateString('tr-TR');
+      const lastTime = new Date(lastView.date).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      const lastPrice = lastView.price;
+
+      // Fiyat değişimi hesapla
+      let priceChange = '';
+      if (lastPrice && lastPrice !== '-' && currentPrice && currentPrice !== '-') {
+        const oldPrice = parseFloat(String(lastPrice).replace(',', '.'));
+        const newPrice = parseFloat(String(currentPrice).replace(',', '.'));
+
+        if (!isNaN(oldPrice) && !isNaN(newPrice) && oldPrice > 0) {
+          const diff = newPrice - oldPrice;
+          const changePercent = (diff / oldPrice * 100).toFixed(2);
+
+          if (Math.abs(diff) < 0.01) {
+            // Fiyat aynı kaldı
+            priceChange = '<span style="color: #888;">➡️ Değişmedi</span>';
+          } else if (diff > 0) {
+            // Fiyat yükseldi
+            priceChange = `<span style="color: #4caf50;">▲ +%${changePercent}</span>`;
+          } else {
+            // Fiyat düştü
+            priceChange = `<span style="color: #f44336;">▼ %${changePercent}</span>`;
+          }
+        }
+      }
+
+      messages.push(`
+        <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+          <div style="color: #888; font-size: 11px;">📅 Son görüntüleme: ${lastDate} ${lastTime}</div>
+          <div style="margin-top: 6px; font-size: 12px;">
+            Önceki: <strong style="color: #ff9800;">${lastPrice}</strong> 
+            → Şimdi: <strong style="color: #4fc3f7;">${currentPrice}</strong>
+          </div>
+          <div style="margin-top: 4px; font-size: 13px;">${priceChange}</div>
+        </div>
+      `);
+    } else {
+      // İlk kez görüntüleme
+      messages.push(`
+        <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+          <div style="color: #4caf50; font-size: 11px;">✨ İlk görüntüleme!</div>
+          <div style="margin-top: 4px; font-size: 12px;">
+            Fiyat: <strong style="color: #4fc3f7;">${currentPrice}</strong>
+          </div>
+          <div style="color: #888; font-size: 10px; margin-top: 4px;">
+            Bir sonraki gelişinizde karşılaştırma göreceksiniz.
+          </div>
+        </div>
+      `);
     }
+
+    // Not kontrolü
+    if (notes[symbol]) {
+      messages.push(`
+        <div>
+          <div style="color: #ffc107; font-size: 11px; margin-bottom: 4px;">📝 Notunuz:</div>
+          <div style="font-size: 12px;">${escapeHtml(notes[symbol].note).substring(0, 100)}${notes[symbol].note.length > 100 ? '...' : ''}</div>
+        </div>
+      `);
+    }
+
+    // Bildirim göster (her zaman göster)
+    showToast(`🔍 ${symbol}`, messages.join(''));
+
+    // Son görüntülemeyi güncelle
+    await saveLastView(symbol, currentPrice);
+
+  } catch (e) {
+    console.error('Not/LastView kontrol hatası:', e);
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+async function saveLastView(symbol, price) {
+  try {
+    const result = await chrome.storage.local.get(['stockLastViews']);
+    const lastViews = result.stockLastViews || {};
+
+    lastViews[symbol] = {
+      date: Date.now(),
+      price: price
+    };
+
+    await chrome.storage.local.set({ stockLastViews: lastViews });
   } catch (e) {
     // Storage error
   }
@@ -162,7 +256,8 @@ function showToast(title, message) {
       position: fixed;
       top: 70px;
       right: 20px;
-      max-width: 300px;
+      max-width: 320px;
+      min-width: 280px;
       background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
       border: 1px solid rgba(79, 195, 247, 0.3);
       border-radius: 12px;
@@ -172,11 +267,11 @@ function showToast(title, message) {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       animation: slideIn 0.3s ease;
     ">
-      <div style="color: #4fc3f7; font-weight: 600; font-size: 13px; margin-bottom: 8px;">
+      <div style="color: #4fc3f7; font-weight: 600; font-size: 14px; margin-bottom: 12px;">
         ${title}
       </div>
-      <div style="color: #ddd; font-size: 12px; line-height: 1.5; max-height: 80px; overflow: hidden; text-overflow: ellipsis;">
-        ${message.substring(0, 150)}${message.length > 150 ? '...' : ''}
+      <div style="color: #ddd; font-size: 12px; line-height: 1.6;">
+        ${message}
       </div>
       <button onclick="this.parentElement.parentElement.remove()" style="
         position: absolute;
@@ -186,7 +281,9 @@ function showToast(title, message) {
         border: none;
         color: #888;
         cursor: pointer;
-        font-size: 16px;
+        font-size: 18px;
+        line-height: 1;
+        padding: 4px;
       ">×</button>
     </div>
     <style>
@@ -199,14 +296,14 @@ function showToast(title, message) {
 
   document.body.appendChild(toast);
 
-  // 5 saniye sonra otomatik kapat
+  // 6 saniye sonra otomatik kapat
   setTimeout(() => {
     if (toast.parentElement) {
       toast.style.transition = 'opacity 0.3s';
       toast.style.opacity = '0';
       setTimeout(() => toast.remove(), 300);
     }
-  }, 5000);
+  }, 6000);
 }
 
 // ==================== BAŞLATMA ====================
