@@ -95,7 +95,7 @@ TradingView_Log_Takibi/
 ├── popup.css          # Popup stilleri
 ├── icon16.png         # Küçük ikon
 ├── icon48.png         # Orta ikon
-├── icon128.png        # Büyük iko
+├── icon128.png        # Büyük ikon
 └── README.md          # Bu dosya
 ```
 
