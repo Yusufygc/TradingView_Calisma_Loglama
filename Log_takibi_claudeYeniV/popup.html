@@ -15,24 +15,53 @@
       <p class="subtitle">Hisse takip sistemi</p>
     </header>
 
-    <div class="stats-container">
-      <div class="stat-card">
-        <div class="number" id="totalLogs">0</div>
-        <div class="label">Toplam Kayıt</div>
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="logs">📋 Loglar</button>
+      <button class="tab" data-tab="notes">📝 Notlar</button>
+    </div>
+
+    <!-- Logs Tab -->
+    <div class="tab-content active" id="logs-tab">
+      <div class="stats-container">
+        <div class="stat-card">
+          <div class="number" id="totalLogs">0</div>
+          <div class="label">Toplam Kayıt</div>
+        </div>
+        <div class="stat-card">
+          <div class="number" id="todayLogs">0</div>
+          <div class="label">Bugün</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <div class="number" id="todayLogs">0</div>
-        <div class="label">Bugün</div>
+
+      <div class="controls">
+        <button class="btn btn-secondary" id="exportCSV">📥 CSV İndir</button>
+        <button class="btn btn-danger" id="clearLogs">🗑️ Temizle</button>
+      </div>
+
+      <div class="logs-container" id="logsContainer">
+        <p class="empty-state">Henüz log yok. TradingView'de bir hisse açın.</p>
       </div>
     </div>
 
-    <div class="controls">
-      <button class="btn btn-secondary" id="exportCSV">📥 CSV İndir</button>
-      <button class="btn btn-danger" id="clearLogs">🗑️ Temizle</button>
-    </div>
+    <!-- Notes Tab -->
+    <div class="tab-content" id="notes-tab">
+      <div class="current-note-section">
+        <div class="note-header">
+          <span class="note-symbol" id="currentSymbol">--</span>
+          <span class="note-badge" id="noteBadge"></span>
+        </div>
+        <textarea id="noteInput" placeholder="Bu hisse için notunuzu yazın..." rows="3"></textarea>
+        <button class="btn btn-primary" id="saveNote">💾 Notu Kaydet</button>
+      </div>
 
-    <div class="logs-container" id="logsContainer">
-      <p class="empty-state">Henüz log yok. TradingView'de bir hisse açın.</p>
+      <div class="notes-divider">
+        <span>Tüm Notlar</span>
+      </div>
+
+      <div class="all-notes-container" id="allNotesContainer">
+        <p class="empty-state">Henüz not yok.</p>
+      </div>
     </div>
 
     <footer>

@@ -9,7 +9,7 @@ body {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   color: #fff;
   min-width: 360px;
-  max-height: 500px;
+  max-height: 550px;
   overflow-y: auto;
 }
 
@@ -19,7 +19,7 @@ body {
 
 header {
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 header h1 {
@@ -33,6 +33,48 @@ header h1 {
   color: #888;
 }
 
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.tab {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #888;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab.active {
+  background: rgba(79, 195, 247, 0.2);
+  color: #4fc3f7;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Stats */
 .stats-container {
   display: flex;
   gap: 12px;
@@ -59,6 +101,7 @@ header h1 {
   margin-top: 4px;
 }
 
+/* Buttons */
 .controls {
   display: flex;
   gap: 8px;
@@ -74,6 +117,16 @@ header h1 {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #4fc3f7 0%, #29b6f6 100%);
+  color: #1a1a2e;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 195, 247, 0.3);
 }
 
 .btn-secondary {
@@ -94,8 +147,28 @@ header h1 {
   background: rgba(244, 67, 54, 0.4);
 }
 
-.logs-container {
-  max-height: 280px;
+.btn-icon {
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-icon-danger:hover {
+  background: rgba(244, 67, 54, 0.2);
+}
+
+/* Logs */
+.logs-container,
+.all-notes-container {
+  max-height: 250px;
   overflow-y: auto;
 }
 
@@ -167,6 +240,124 @@ header h1 {
   margin-right: 12px;
 }
 
+/* Notes */
+.current-note-section {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.note-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.note-symbol {
+  font-size: 18px;
+  font-weight: 700;
+  color: #4fc3f7;
+}
+
+.note-badge {
+  font-size: 11px;
+  color: #4caf50;
+  background: rgba(76, 175, 80, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.note-badge:empty {
+  display: none;
+}
+
+#noteInput {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  color: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  margin-bottom: 12px;
+}
+
+#noteInput:focus {
+  outline: none;
+  border-color: #4fc3f7;
+}
+
+#noteInput::placeholder {
+  color: #666;
+}
+
+.notes-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: #666;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.notes-divider::before,
+.notes-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.note-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-left: 3px solid #ffc107;
+}
+
+.note-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.note-card-symbol {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffc107;
+}
+
+.note-card-date {
+  font-size: 10px;
+  color: #888;
+}
+
+.note-card-text {
+  font-size: 12px;
+  color: #ddd;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.note-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Footer */
 footer {
   text-align: center;
   margin-top: 16px;

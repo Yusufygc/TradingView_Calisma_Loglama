@@ -129,7 +129,84 @@ function checkSymbolChange() {
     }
 
     console.log('✅ Aktif Sembol:', currentSymbol, '| Fiyat:', price);
-  }, 1500); // 1.5 saniye bekle (title güncellensin)
+
+    // Not kontrolü yap
+    checkForExistingNote(newSymbol);
+  }, 1500);
+}
+
+// ==================== NOT BİLDİRİMİ ====================
+
+async function checkForExistingNote(symbol) {
+  try {
+    const result = await chrome.storage.local.get(['stockNotes']);
+    const notes = result.stockNotes || {};
+
+    if (notes[symbol]) {
+      showToast(`📝 "${symbol}" için notunuz var`, notes[symbol].note);
+    }
+  } catch (e) {
+    // Storage error
+  }
+}
+
+function showToast(title, message) {
+  // Mevcut toast varsa kaldır
+  const existing = document.getElementById('tv-logger-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'tv-logger-toast';
+  toast.innerHTML = `
+    <div style="
+      position: fixed;
+      top: 70px;
+      right: 20px;
+      max-width: 300px;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      border: 1px solid rgba(79, 195, 247, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      z-index: 999999;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      animation: slideIn 0.3s ease;
+    ">
+      <div style="color: #4fc3f7; font-weight: 600; font-size: 13px; margin-bottom: 8px;">
+        ${title}
+      </div>
+      <div style="color: #ddd; font-size: 12px; line-height: 1.5; max-height: 80px; overflow: hidden; text-overflow: ellipsis;">
+        ${message.substring(0, 150)}${message.length > 150 ? '...' : ''}
+      </div>
+      <button onclick="this.parentElement.parentElement.remove()" style="
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: transparent;
+        border: none;
+        color: #888;
+        cursor: pointer;
+        font-size: 16px;
+      ">×</button>
+    </div>
+    <style>
+      @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+    </style>
+  `;
+
+  document.body.appendChild(toast);
+
+  // 5 saniye sonra otomatik kapat
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.style.transition = 'opacity 0.3s';
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, 5000);
 }
 
 // ==================== BAŞLATMA ====================
