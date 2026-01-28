@@ -1,145 +1,150 @@
-// TradingView Simple Logger - Popup Script
-// =========================================
+// TradingView Simple Logger - Popup Logic
+// =======================================
+
+const STORAGE_KEYS = {
+  LOGS: 'activityLogs',
+  NOTES: 'stockNotes',
+  LAST_VIEWS: 'stockLastViews'
+};
 
 let currentSymbol = null;
 
-document.addEventListener('DOMContentLoaded', async () => {
-  await loadLogs();
-  await loadCurrentSymbol();
-  await loadNotes();
-  setupEventListeners();
-  setupTabs();
-});
+// ==================== YARDIMCI FONKSİYONLAR ====================
 
-// ==================== TABS ====================
-
-function setupTabs() {
-  const tabs = document.querySelectorAll('.tab');
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      // Remove active from all
-      tabs.forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
-      // Add active to clicked
-      tab.classList.add('active');
-      const tabId = tab.dataset.tab + '-tab';
-      document.getElementById(tabId).classList.add('active');
-    });
-  });
+function escapeHtml(text) {
+  if (text == null) return '';
+  const div = document.createElement('div');
+  div.textContent = String(text);
+  return div.innerHTML;
 }
 
-// ==================== LOGS ====================
+function normalizePrice(price) {
+  if (!price || price === '-' || price === '') return null;
+  const cleaned = String(price).trim().replace(/\s/g, '');
+  if (!cleaned) return null;
 
-async function loadLogs() {
-  try {
-    const result = await chrome.storage.local.get(['activityLogs']);
-    const logs = result.activityLogs || [];
-
-    updateStats(logs);
-    displayLogs(logs);
-  } catch (error) {
-    console.error('Log yükleme hatası:', error);
+  // TR vs EN format
+  if (cleaned.includes(',')) {
+    // 1.234,56 -> 1234.56
+    return parseFloat(cleaned.replace(/\./g, '').replace(',', '.'));
+  } else {
+    // 1,234.56 -> 1234.56
+    return parseFloat(cleaned.replace(/,/g, ''));
   }
 }
 
-function updateStats(logs) {
+function formatPrice(price) {
+  const p = normalizePrice(price);
+  if (p === null) return '-';
+  return p.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ==================== LOG YÖNETİMİ ====================
+
+async function loadLogs() {
+  const result = await chrome.storage.local.get([STORAGE_KEYS.LOGS]);
+  const logs = result[STORAGE_KEYS.LOGS] || [];
+
+  // İstatistikler
   const today = new Date().toLocaleDateString('tr-TR');
-  const todayLogs = logs.filter(log => log.date === today);
+  const todayLogs = logs.filter(l => l.date === today);
 
   document.getElementById('totalLogs').textContent = logs.length;
   document.getElementById('todayLogs').textContent = todayLogs.length;
+
+  displayLogs(logs);
 }
 
 function displayLogs(logs) {
   const container = document.getElementById('logsContainer');
 
   if (logs.length === 0) {
-    container.innerHTML = '<p class="empty-state">Henüz log yok. TradingView\'de bir hisse açın.</p>';
+    container.innerHTML = '<p class="empty-state">Henüz log yok.</p>';
     return;
   }
 
-  const sortedLogs = [...logs].reverse();
+  // Ters sırala (en yeni en üstte)
+  const sortedLogs = [...logs].reverse().slice(0, 100);
 
-  container.innerHTML = sortedLogs.map(log => `
-    <div class="log-item ${getLogClass(log.action)}">
-      <div class="log-header">
-        <span class="log-date">${log.date} ${log.time}</span>
-        <span class="log-symbol">${log.symbol}</span>
+  container.innerHTML = sortedLogs.map(log => {
+    let cssClass = '';
+    if (log.action.includes('Başladı')) cssClass = 'log-start';
+    else if (log.action.includes('Değişti')) cssClass = 'log-change';
+    else if (log.action.includes('Kapandı')) cssClass = 'log-end';
+
+    // Detayları formatla
+    const details = log.details || {};
+    const detailText = Object.entries(details)
+      .filter(([k]) => k !== 'fiyat')
+      .map(([k, v]) => `<b>${k}:</b> ${v}`)
+      .join(' | ');
+
+    return `
+      <div class="log-item ${cssClass}">
+        <div class="log-header">
+          <span class="log-date">${log.date} ${log.time}</span>
+          <span class="log-symbol">${escapeHtml(log.symbol)}</span>
+        </div>
+        <div class="log-action">${escapeHtml(log.action)}</div>
+        <div class="log-details">
+          ${detailText}
+          ${log.price ? `<div class="log-price">💰 ${formatPrice(log.price)}</div>` : ''}
+        </div>
       </div>
-      <div class="log-action">${log.action}</div>
-      <div class="log-details">
-        ${formatDetails(log.details)}
-        ${log.price && log.price !== '-' ? `<div class="log-price">💰 Fiyat: ${log.price}</div>` : ''}
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
-function getLogClass(action) {
-  if (action.includes('Başladı')) return 'log-start';
-  if (action.includes('Değişti')) return 'log-change';
-  if (action.includes('Kapandı')) return 'log-end';
-  return '';
-}
-
-function formatDetails(details) {
-  if (!details) return '';
-
-  return Object.entries(details)
-    .filter(([key]) => key !== 'fiyat')
-    .map(([key, value]) => `<span class="detail-item"><strong>${key}:</strong> ${value}</span>`)
-    .join(' ');
-}
-
-// ==================== NOTES ====================
-
-async function loadCurrentSymbol() {
-  try {
-    // Aktif TradingView sekmesinden sembol al
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-    if (tab && tab.url && tab.url.includes('tradingview.com')) {
-      // Title'dan sembol çıkar
-      const titleMatch = tab.title.match(/^([A-Z0-9]+)/);
-      if (titleMatch && titleMatch[1] !== 'TradingView') {
-        currentSymbol = titleMatch[1];
-      }
-    }
-
-    document.getElementById('currentSymbol').textContent = currentSymbol || '--';
-
-    // Mevcut not varsa yükle
-    if (currentSymbol) {
-      const result = await chrome.storage.local.get(['stockNotes']);
-      const notes = result.stockNotes || {};
-
-      if (notes[currentSymbol]) {
-        document.getElementById('noteInput').value = notes[currentSymbol].note;
-        document.getElementById('noteBadge').textContent = '✓ Not var';
-        document.getElementById('noteBadge').classList.add('has-note');
-      } else {
-        document.getElementById('noteBadge').textContent = '';
-        document.getElementById('noteBadge').classList.remove('has-note');
-      }
-    }
-  } catch (error) {
-    console.error('Sembol yükleme hatası:', error);
+async function clearLogs() {
+  if (confirm('Tüm kayıtlar silinsin mi?')) {
+    await chrome.storage.local.set({ [STORAGE_KEYS.LOGS]: [] });
+    loadLogs();
   }
 }
+
+// ==================== CSV EXPORT ====================
+
+async function exportCSV() {
+  const result = await chrome.storage.local.get([STORAGE_KEYS.LOGS]);
+  const logs = result[STORAGE_KEYS.LOGS] || [];
+
+  if (logs.length === 0) {
+    alert('İndirilecek veri yok.');
+    return;
+  }
+
+  // CSV Oluştur
+  const headers = ['Tarih', 'Saat', 'Sembol', 'Aksiyon', 'Fiyat', 'Detay'];
+  const rows = logs.map(l => {
+    const d = l.details || {};
+    const detailStr = Object.entries(d).map(([k, v]) => `${k}:${v}`).join(' ');
+
+    return [
+      l.date,
+      l.time,
+      l.symbol,
+      l.action,
+      formatPrice(l.price),
+      `"${detailStr.replace(/"/g, '""')}"`
+    ].join(';');
+  });
+
+  const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `tradingview_logs_${Date.now()}.csv`;
+  a.click();
+}
+
+// ==================== NOT YÖNETİMİ ====================
 
 async function loadNotes() {
-  try {
-    const result = await chrome.storage.local.get(['stockNotes']);
-    const notes = result.stockNotes || {};
+  const result = await chrome.storage.local.get([STORAGE_KEYS.NOTES]);
+  const notes = result[STORAGE_KEYS.NOTES] || {};
 
-    displayAllNotes(notes);
-  } catch (error) {
-    console.error('Not yükleme hatası:', error);
-  }
-}
-
-function displayAllNotes(notes) {
   const container = document.getElementById('allNotesContainer');
   const entries = Object.entries(notes);
 
@@ -148,185 +153,138 @@ function displayAllNotes(notes) {
     return;
   }
 
-  // Son güncellemeye göre sırala
-  entries.sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0));
-
-  container.innerHTML = entries.map(([symbol, data]) => {
-    const date = data.updatedAt
-      ? new Date(data.updatedAt).toLocaleDateString('tr-TR')
-      : '';
-
-    return `
-      <div class="note-card">
-        <div class="note-card-header">
-          <span class="note-card-symbol">${symbol}</span>
-          <span class="note-card-date">${date}</span>
-        </div>
-        <div class="note-card-text">${escapeHtml(data.note)}</div>
-        <div class="note-card-actions">
-          <button class="btn-icon" onclick="editNote('${symbol}')">✏️</button>
-          <button class="btn-icon btn-icon-danger" onclick="deleteNote('${symbol}')">🗑️</button>
+  container.innerHTML = entries.map(([sym, data]) => `
+    <div class="note-card">
+      <div class="note-card-header">
+        <span class="note-card-symbol">${escapeHtml(sym)}</span>
+        <div class="note-actions">
+          <button class="btn-icon edit-note-btn" data-symbol="${escapeHtml(sym)}" title="Düzenle">✏️</button>
+          <button class="btn-icon btn-icon-danger delete-note-btn" data-symbol="${escapeHtml(sym)}" title="Sil">🗑️</button>
         </div>
       </div>
-    `;
-  }).join('');
-}
+      <div class="note-card-text">${escapeHtml(data.note)}</div>
+    </div>
+  `).join('');
 
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-async function saveNote() {
-  const noteText = document.getElementById('noteInput').value.trim();
-  const symbol = currentSymbol;
-
-  if (!symbol || symbol === '--') {
-    alert('TradingView\'de bir hisse açın.');
-    return;
-  }
-
-  try {
-    const result = await chrome.storage.local.get(['stockNotes']);
-    const notes = result.stockNotes || {};
-
-    if (noteText) {
-      notes[symbol] = {
-        note: noteText,
-        updatedAt: Date.now()
-      };
-      document.getElementById('noteBadge').textContent = '✓ Kaydedildi';
-      document.getElementById('noteBadge').classList.add('has-note');
-    } else {
-      delete notes[symbol];
-      document.getElementById('noteBadge').textContent = '';
-      document.getElementById('noteBadge').classList.remove('has-note');
-    }
-
-    await chrome.storage.local.set({ stockNotes: notes });
-    await loadNotes();
-
-    // Kısa bildirim
-    setTimeout(() => {
-      if (notes[symbol]) {
-        document.getElementById('noteBadge').textContent = '✓ Not var';
+  // Silme butonları
+  document.querySelectorAll('.delete-note-btn').forEach(btn => {
+    btn.onclick = async (e) => {
+      const s = e.target.closest('.delete-note-btn').dataset.symbol;
+      if (confirm(`${s} notunu sil?`)) {
+        delete notes[s];
+        await chrome.storage.local.set({ [STORAGE_KEYS.NOTES]: notes });
+        loadNotes();
+        if (currentSymbol === s) checkCurrentSymbolNote();
       }
-    }, 2000);
+    };
+  });
 
-  } catch (error) {
-    console.error('Not kaydetme hatası:', error);
-    alert('Not kaydedilemedi.');
+  // Düzenleme butonları
+  document.querySelectorAll('.edit-note-btn').forEach(btn => {
+    btn.onclick = (e) => {
+      const s = e.target.closest('.edit-note-btn').dataset.symbol;
+      const noteData = notes[s];
+      if (noteData) {
+        // Düzenleme moduna geç
+        currentSymbol = s;
+        document.getElementById('currentSymbol').textContent = s;
+        document.getElementById('noteInput').value = noteData.note;
+        document.getElementById('noteInput').focus();
+        // UI güncelle
+        document.getElementById('noteBadge').textContent = '✏️ Düzenleniyor';
+        document.getElementById('noteBadge').classList.add('has-note');
+        // Notlar tabını aktif yap (gerekirse)
+        document.querySelector('[data-tab="notes"]').click();
+      }
+    };
+  });
+}
+
+async function saveCurrentNote() {
+  const text = document.getElementById('noteInput').value.trim();
+  if (!currentSymbol) return;
+
+  const result = await chrome.storage.local.get([STORAGE_KEYS.NOTES]);
+  const notes = result[STORAGE_KEYS.NOTES] || {};
+
+  if (text) {
+    notes[currentSymbol] = { note: text, updatedAt: Date.now() };
+  } else {
+    delete notes[currentSymbol];
+  }
+
+  await chrome.storage.local.set({ [STORAGE_KEYS.NOTES]: notes });
+
+  loadNotes();
+  checkCurrentSymbolNote();
+
+  const btn = document.getElementById('saveNote');
+  const originalText = btn.textContent;
+  btn.textContent = '✓ Kaydedildi';
+  setTimeout(() => btn.textContent = originalText, 1500);
+}
+
+async function checkCurrentSymbolNote() {
+  if (!currentSymbol) return;
+
+  const result = await chrome.storage.local.get([STORAGE_KEYS.NOTES]);
+  const notes = result[STORAGE_KEYS.NOTES] || {};
+
+  const badge = document.getElementById('noteBadge');
+  const input = document.getElementById('noteInput');
+
+  if (notes[currentSymbol]) {
+    badge.textContent = '✓ Not Var';
+    badge.classList.add('has-note');
+    input.value = notes[currentSymbol].note;
+  } else {
+    badge.textContent = '';
+    badge.classList.remove('has-note');
+    input.value = '';
   }
 }
 
-window.editNote = async function (symbol) {
-  try {
-    const result = await chrome.storage.local.get(['stockNotes']);
-    const notes = result.stockNotes || {};
+// ==================== INIT ====================
 
-    if (notes[symbol]) {
-      document.getElementById('noteInput').value = notes[symbol].note;
-      document.getElementById('currentSymbol').textContent = symbol;
-      currentSymbol = symbol;
-      document.getElementById('noteBadge').textContent = '✓ Not var';
-      document.getElementById('noteBadge').classList.add('has-note');
+document.addEventListener('DOMContentLoaded', async () => {
+  // Tablar
+  document.querySelectorAll('.tab').forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.getElementById(t.dataset.tab + '-tab').classList.add('active');
+    };
+  });
 
-      // Notes tab'ına geç
-      document.querySelector('[data-tab="notes"]').click();
-      document.getElementById('noteInput').focus();
+  // Butonlar
+  document.getElementById('exportCSV').onclick = exportCSV;
+  document.getElementById('clearLogs').onclick = clearLogs;
+  document.getElementById('saveNote').onclick = saveCurrentNote;
+
+  // Verileri Yükle
+  loadLogs();
+  loadNotes();
+
+  // Mevcut hisseyi al
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab && tab.url && tab.url.includes('tradingview.com')) {
+    try {
+      // Content script'ten iste
+      const resp = await chrome.tabs.sendMessage(tab.id, { type: 'GET_STATE' });
+      if (resp && resp.state && resp.state.currentSymbol) {
+        currentSymbol = resp.state.currentSymbol;
+        document.getElementById('currentSymbol').textContent = currentSymbol;
+        checkCurrentSymbolNote();
+      }
+    } catch (e) {
+      // Fallback title parsing
+      const m = tab.title.match(/^([A-Z0-9]+)/);
+      if (m && m[1] !== 'TradingView') {
+        currentSymbol = m[1];
+        document.getElementById('currentSymbol').textContent = currentSymbol;
+        checkCurrentSymbolNote();
+      }
     }
-  } catch (error) {
-    console.error('Not düzenleme hatası:', error);
   }
-};
-
-window.deleteNote = async function (symbol) {
-  if (!confirm(`"${symbol}" için notu silmek istiyor musunuz?`)) return;
-
-  try {
-    const result = await chrome.storage.local.get(['stockNotes']);
-    const notes = result.stockNotes || {};
-
-    delete notes[symbol];
-    await chrome.storage.local.set({ stockNotes: notes });
-
-    // UI güncelle
-    if (currentSymbol === symbol) {
-      document.getElementById('noteInput').value = '';
-      document.getElementById('noteBadge').textContent = '';
-      document.getElementById('noteBadge').classList.remove('has-note');
-    }
-
-    await loadNotes();
-  } catch (error) {
-    console.error('Not silme hatası:', error);
-  }
-};
-
-// ==================== EVENT LISTENERS ====================
-
-function setupEventListeners() {
-  document.getElementById('exportCSV').addEventListener('click', exportToCSV);
-  document.getElementById('clearLogs').addEventListener('click', clearLogs);
-  document.getElementById('saveNote').addEventListener('click', saveNote);
-}
-
-async function exportToCSV() {
-  try {
-    const result = await chrome.storage.local.get(['activityLogs']);
-    const logs = result.activityLogs || [];
-
-    if (logs.length === 0) {
-      alert('Dışa aktarılacak log yok.');
-      return;
-    }
-
-    const headers = ['Tarih', 'Saat', 'Sembol', 'Aksiyon', 'Fiyat', 'Eski Sembol', 'Yeni Sembol'];
-    const rows = logs.map(log => {
-      const details = log.details || {};
-      return [
-        log.date || '',
-        log.time || '',
-        log.symbol || '',
-        log.action || '',
-        log.price || details.fiyat || '-',
-        details.eski || '',
-        details.yeni || details.sembol || ''
-      ];
-    });
-
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(cell => {
-        const cleaned = String(cell).replace(/"/g, '""');
-        return `"${cleaned}"`;
-      }).join(';'))
-      .join('\r\n');
-
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-
-    const filename = `hisse_takip_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.csv`;
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-
-    URL.revokeObjectURL(url);
-  } catch (error) {
-    console.error('CSV export hatası:', error);
-    alert('Dışa aktarma başarısız.');
-  }
-}
-
-async function clearLogs() {
-  if (!confirm('Tüm loglar silinecek. Emin misiniz?')) return;
-
-  try {
-    await chrome.storage.local.remove(['activityLogs']);
-    await loadLogs();
-  } catch (error) {
-    console.error('Silme hatası:', error);
-  }
-}
+});

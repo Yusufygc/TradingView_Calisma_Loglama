@@ -1,16 +1,30 @@
 {
   "manifest_version": 3,
-  "name": "TradingView Activity Logger",
-  "version": "1.0",
-  "description": "TradingView'daki aktivitelerinizi tarih ve saate göre loglar",
+  "name": "TradingView Logger",
+  "version": "2.0.0",
+  "description": "TradingView'de hisse değişimlerinizi otomatik loglar, fiyat geçmişini takip eder ve kişisel notlarınızı saklar.",
   "permissions": [
     "storage",
     "activeTab",
     "tabs"
   ],
   "host_permissions": [
-    "https://www.tradingview.com/*",
+    "https://*.tradingview.com/*",
     "https://tr.tradingview.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.tradingview.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
   ],
   "action": {
     "default_popup": "popup.html",
@@ -18,20 +32,8 @@
       "16": "icon16.png",
       "48": "icon48.png",
       "128": "icon128.png"
-    }
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://www.tradingview.com/*",
-        "https://tr.tradingview.com/*"
-      ],
-      "js": ["content.js"],
-      "run_at": "document_idle"
-    }
-  ],
-  "background": {
-    "service_worker": "background.js"
+    },
+    "default_title": "TradingView Logger"
   },
   "icons": {
     "16": "icon16.png",

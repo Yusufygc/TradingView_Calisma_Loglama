@@ -101,38 +101,70 @@ function sendLog(action, details) {
 
 // ==================== SEMBOL DEĞİŞİM KONTROLÜ ====================
 
-function checkSymbolChange() {
-  const newSymbol = detectSymbol();
+let debounceTimer = null;
+let pendingSymbol = null;
 
-  if (!newSymbol || newSymbol === 'TradingView' || newSymbol === currentSymbol) return;
+function checkSymbolChange() {
+  const detected = detectSymbol();
+
+  // Geçersiz veya aynı sembol ise işlem yapma
+  if (!detected || detected === 'TradingView' || detected === currentSymbol) {
+    // Eğer bekleyen bir işlem varsa ve sembol eski haline döndüyse (flicker), iptal et
+    if (pendingSymbol && detected === currentSymbol) {
+      clearTimeout(debounceTimer);
+      pendingSymbol = null;
+    }
+    return;
+  }
+
+  // Yeni bir sembol algılandı
+  if (detected !== pendingSymbol) {
+    // Önceki sayacı iptal et (Hızlı değişimlerde sonuncusu geçerli olsun)
+    if (debounceTimer) clearTimeout(debounceTimer);
+
+    pendingSymbol = detected;
+    console.log(`⏳ Sembol değişimi algılandı: ${currentSymbol} -> ${detected} (Bekleniyor...)`);
+
+    debounceTimer = setTimeout(() => {
+      confirmSymbolChange(detected);
+    }, 1500); // 1.5 saniye boyunca kararlı kalmalı
+  }
+}
+
+function confirmSymbolChange(newSymbol) {
+  // Son bir kez daha kontrol et (Hala aynı mı?)
+  const currentDetected = detectSymbol();
+  if (currentDetected !== newSymbol) {
+    console.warn(`⚠️ Sembol kararsız, işlem iptal: ${newSymbol} vs ${currentDetected}`);
+    pendingSymbol = null;
+    return;
+  }
 
   const oldSymbol = currentSymbol;
   currentSymbol = newSymbol;
+  pendingSymbol = null;
 
-  console.log('🔄 Sembol Değişimi:', oldSymbol, '→', newSymbol);
+  console.log('🔄 Sembol Değişimi Onaylandı:', oldSymbol, '→', newSymbol);
 
-  // Title'ın güncellenmesi için kısa bir gecikme ver, sonra fiyatı al
-  setTimeout(() => {
-    const price = extractCurrentPrice();
+  const price = extractCurrentPrice();
 
-    if (oldSymbol && oldSymbol !== 'Bilinmiyor') {
-      sendLog('Sembol Değişti', {
-        eski: oldSymbol,
-        yeni: newSymbol,
-        fiyat: price
-      });
-    } else {
-      sendLog('Oturum Başladı', {
-        sembol: newSymbol,
-        fiyat: price
-      });
-    }
+  if (oldSymbol && oldSymbol !== 'Bilinmiyor') {
+    sendLog('Sembol Değişti', {
+      eski: oldSymbol,
+      yeni: newSymbol,
+      fiyat: price
+    });
+  } else {
+    sendLog('Oturum Başladı', {
+      sembol: newSymbol,
+      fiyat: price
+    });
+  }
 
-    console.log('✅ Aktif Sembol:', currentSymbol, '| Fiyat:', price);
+  console.log('✅ Aktif Sembol:', currentSymbol, '| Fiyat:', price);
 
-    // Not kontrolü yap
-    checkForExistingNote(newSymbol);
-  }, 1500);
+  // Not kontrolü yap
+  checkForExistingNote(newSymbol);
 }
 
 // ==================== SON GÖRÜNTÜLEME & NOT BİLDİRİMİ ====================
@@ -273,7 +305,7 @@ function showToast(title, message) {
       <div style="color: #ddd; font-size: 12px; line-height: 1.6;">
         ${message}
       </div>
-      <button onclick="this.parentElement.parentElement.remove()" style="
+      <button class="toast-close-btn" style="
         position: absolute;
         top: 8px;
         right: 8px;
@@ -296,6 +328,11 @@ function showToast(title, message) {
 
   document.body.appendChild(toast);
 
+  // Event listener ile kapatma (CSP uyumlu)
+  toast.querySelector('.toast-close-btn').addEventListener('click', () => {
+    toast.remove();
+  });
+
   // 6 saniye sonra otomatik kapat
   setTimeout(() => {
     if (toast.parentElement) {
@@ -305,6 +342,19 @@ function showToast(title, message) {
     }
   }, 6000);
 }
+
+// ==================== MESAJ DİNLEYİCİ (POPUP İÇİN) ====================
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'GET_STATE') {
+    sendResponse({
+      state: {
+        currentSymbol: currentSymbol,
+        currentPrice: extractCurrentPrice()
+      }
+    });
+  }
+});
 
 // ==================== BAŞLATMA ====================
 
