@@ -6,8 +6,7 @@
   "permissions": [
     "storage",
     "activeTab",
-    "tabs",
-    "downloads"
+    "tabs"
   ],
   "host_permissions": [
     "https://www.tradingview.com/*",
