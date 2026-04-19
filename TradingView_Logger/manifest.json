@@ -1,11 +1,10 @@
 {
   "manifest_version": 3,
   "name": "TradingView Logger",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "TradingView'de hisse değişimlerinizi otomatik loglar, fiyat geçmişini takip eder ve kişisel notlarınızı saklar.",
   "permissions": [
     "storage",
-    "activeTab",
     "tabs"
   ],
   "host_permissions": [

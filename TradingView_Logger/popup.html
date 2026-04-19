@@ -1,28 +1,35 @@
 <!DOCTYPE html>
 <html lang="tr">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TradingView Logger</title>
   <link rel="stylesheet" href="popup.css">
 </head>
-
 <body>
   <div class="container">
     <header>
-      <h1>📊 TradingView Logger</h1>
-      <p class="subtitle">Hisse takip sistemi v2.0</p>
+      <div class="header-top">
+        <h1>📊 TradingView Logger</h1>
+        <span class="version-badge">v3.0</span>
+      </div>
+      <div class="header-live" id="headerLive">
+        <span class="live-dot"></span>
+        <span id="liveSymbol">Bekleniyor...</span>
+        <span class="live-price" id="livePrice"></span>
+      </div>
     </header>
 
     <!-- Tabs -->
     <div class="tabs">
       <button class="tab active" data-tab="logs">📋 Loglar</button>
       <button class="tab" data-tab="notes">📝 Notlar</button>
+      <button class="tab" data-tab="stats">📈 İstatistik</button>
     </div>
 
-    <!-- Logs Tab -->
+    <!-- ==================== LOGS TAB ==================== -->
     <div class="tab-content active" id="logs-tab">
+
       <div class="stats-container">
         <div class="stat-card">
           <div class="number" id="totalLogs">0</div>
@@ -32,6 +39,39 @@
           <div class="number" id="todayLogs">0</div>
           <div class="label">Bugün</div>
         </div>
+        <div class="stat-card stat-card-wide">
+          <div class="number accent" id="topSymbol">—</div>
+          <div class="label">En Çok Bakılan</div>
+        </div>
+      </div>
+
+      <!-- Arama & Filtre -->
+      <div class="search-bar">
+        <div class="search-input-wrap">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            id="logSearch"
+            placeholder="Hisse ara... (ör: PGSUS)"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button class="case-toggle" id="caseToggle" title="Büyük/küçük harf duyarlılığı">Aa</button>
+          <button class="clear-search" id="clearSearch" title="Temizle" style="display:none">✕</button>
+        </div>
+        <div class="filter-row">
+          <select id="actionFilter" class="filter-select">
+            <option value="">Tüm Aksiyonlar</option>
+            <option value="Başladı">Oturum Başladı</option>
+            <option value="Değişti">Sembol Değişti</option>
+            <option value="Kapandı">Oturum Kapandı</option>
+          </select>
+          <select id="sortOrder" class="filter-select">
+            <option value="desc">En Yeni Önce</option>
+            <option value="asc">En Eski Önce</option>
+          </select>
+        </div>
+        <div class="search-result-info" id="searchResultInfo" style="display:none"></div>
       </div>
 
       <div class="controls">
@@ -44,19 +84,29 @@
       </div>
     </div>
 
-    <!-- Notes Tab -->
+    <!-- ==================== NOTES TAB ==================== -->
     <div class="tab-content" id="notes-tab">
       <div class="current-note-section">
         <div class="note-header">
           <span class="note-symbol" id="currentSymbol">--</span>
           <span class="note-badge" id="noteBadge"></span>
         </div>
-        <textarea id="noteInput" placeholder="Bu hisse için notunuzu yazın..." rows="3"></textarea>
-        <button class="btn btn-primary" id="saveNote">💾 Notu Kaydet</button>
+        <textarea id="noteInput" placeholder="Bu hisse için notunuzu yazın... (Ctrl+Enter ile kaydet)" rows="3"></textarea>
+        <div class="note-actions-row">
+          <button class="btn btn-primary" id="saveNote">💾 Kaydet</button>
+          <button class="btn btn-secondary" id="clearNote" title="Notu sil">🗑️ Temizle</button>
+        </div>
       </div>
 
       <div class="notes-divider">
         <span>Tüm Notlar</span>
+      </div>
+
+      <!-- Not Arama -->
+      <div class="note-search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="noteSearch" placeholder="Not ara..." autocomplete="off" spellcheck="false" />
+        <button class="clear-search" id="clearNoteSearch" title="Temizle" style="display:none">✕</button>
       </div>
 
       <div class="all-notes-container" id="allNotesContainer">
@@ -64,11 +114,17 @@
       </div>
     </div>
 
+    <!-- ==================== STATS TAB ==================== -->
+    <div class="tab-content" id="stats-tab">
+      <div class="stats-summary" id="statsSummary">
+        <p class="empty-state">Henüz yeterli veri yok.</p>
+      </div>
+    </div>
+
     <footer>
-      <small>💡 Hisse değiştikçe otomatik loglanır</small>
+      <small id="footerHint">💡 Hisse değiştikçe otomatik loglanır</small>
     </footer>
   </div>
   <script src="popup.js"></script>
 </body>
-
 </html>

@@ -47,30 +47,45 @@ function detectSymbol() {
 }
 
 function extractCurrentPrice() {
-  // TradingView title formatı: "PGSUS 200,8 ▲ +1.83% Adsız"
-  // Sembolden sonraki ilk sayıyı yakala (virgül veya nokta içerebilir)
+  // 1. Önce DOM'dan al — en güvenilir kaynak
+  const domSelectors = [
+    '[class*="lastPrice"]',
+    '[data-name="legend-source-item"] [class*="value"]',
+    '[class*="priceWrapper"] [class*="price"]',
+    '.tv-symbol-price-quote__value'
+  ];
+  for (const sel of domSelectors) {
+    const el = document.querySelector(sel);
+    if (el) {
+      const text = el.textContent.trim();
+      // Sadece geçerli fiyat formatı: en az bir rakam içermeli
+      const priceNum = text.match(/^[\d.,\s]+$/);
+      if (priceNum && text.length > 0 && text !== '0') return text.trim();
+    }
+  }
+
+  // 2. Title fallback — sembolü güvenli şekilde atla
+  // Format: "PGSUS 200,8 ▲ +1.83% Adsız"
+  // Dikkat: sembol rakam içerebilir (US30, BTC.P, EUR/USD)
+  // Bu nedenle sembolden sonra boşluk + rakam ile başlayan kısmı al
   const title = document.title;
+  const symbol = currentSymbol || '';
 
-  // Sembolü atla ve fiyatı bul
-  // Format: "SEMBOL FIYAT ▲/▼ ..." veya "SEMBOL FIYAT ..."
-  const priceMatch = title.match(/^[A-Z0-9]+\s+([\d.,]+)/);
-  if (priceMatch && priceMatch[1]) {
-    return priceMatch[1];
+  if (symbol && title.startsWith(symbol)) {
+    // Bilinen sembolü atla, sonrasındaki ilk sayıyı al
+    const afterSymbol = title.slice(symbol.length).trim();
+    const priceMatch = afterSymbol.match(/^([\d.,]+)/);
+    if (priceMatch && priceMatch[1]) return priceMatch[1];
   }
 
-  // Alternatif: Herhangi bir sayı ara (ilk match)
-  const anyNumber = title.match(/(\d+[.,]?\d*)/);
-  if (anyNumber && anyNumber[1]) {
-    return anyNumber[1];
-  }
-
-  // DOM'dan fiyat al - Last price elementi
-  const lastPriceElem = document.querySelector('[class*="lastPrice"]') ||
-    document.querySelector('[data-name="legend-source-item"] [class*="value"]');
-  if (lastPriceElem) {
-    const text = lastPriceElem.textContent.trim();
-    const priceNum = text.match(/[\d.,]+/);
-    if (priceNum) return priceNum[0];
+  // 3. Genel title regex — BÜYÜK HARF sembol bloğunu atla, sonrasındaki sayıyı al
+  // "^[A-Z][A-Z0-9./]+" yerine boşlukla ayrılmış ilk token'ı sembol kabul et
+  const titlePriceMatch = title.match(/^[^\s]+\s+([\d.,]+)/);
+  if (titlePriceMatch && titlePriceMatch[1]) {
+    // Çok kısa sayılar (1-2 hane) sembol kalıntısı olabilir, en az 3 karakter iste
+    if (titlePriceMatch[1].replace(/[.,]/g, '').length >= 2) {
+      return titlePriceMatch[1];
+    }
   }
 
   return '-';
@@ -132,14 +147,27 @@ function checkSymbolChange() {
 }
 
 function confirmSymbolChange(newSymbol) {
-  // Son bir kez daha kontrol et (Hala aynı mı?)
+  // Son bir kez daha kontrol et — ama TradingView hâlâ render ediyor olabilir.
+  // Eğer sembol değişti gibi görünüyorsa tek retry ver (500ms), sonra kabul et.
   const currentDetected = detectSymbol();
-  if (currentDetected !== newSymbol) {
-    console.warn(`⚠️ Sembol kararsız, işlem iptal: ${newSymbol} vs ${currentDetected}`);
+
+  if (currentDetected && currentDetected !== newSymbol && currentDetected !== currentSymbol) {
+    // Üçüncü bir sembol çıktı — yeni sembol ile debounce yeniden başlasın
+    console.warn(`⚠️ Sembol değişti: ${newSymbol} → ${currentDetected}, yeniden bekleyeceğiz`);
+    pendingSymbol = currentDetected;
+    debounceTimer = setTimeout(() => confirmSymbolChange(currentDetected), 800);
+    return;
+  }
+
+  if (currentDetected === currentSymbol) {
+    // Sembol eski haline döndü (geçici flicker), iptal et
+    console.warn(`⚠️ Sembol kararsız, işlem iptal: ${newSymbol} → geri döndü ${currentSymbol}`);
     pendingSymbol = null;
     return;
   }
 
+  // currentDetected === newSymbol veya null (DOM henüz hazır değil ama title onayladı)
+  // Her iki durumda da devam et — null durumunda newSymbol'e güven
   const oldSymbol = currentSymbol;
   currentSymbol = newSymbol;
   pendingSymbol = null;
@@ -163,7 +191,6 @@ function confirmSymbolChange(newSymbol) {
 
   console.log('✅ Aktif Sembol:', currentSymbol, '| Fiyat:', price);
 
-  // Not kontrolü yap
   checkForExistingNote(newSymbol);
 }
 
@@ -358,32 +385,100 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // ==================== BAŞLATMA ====================
 
+// Extension context geçersizleştiğinde temizlik yap
+let _observerRef = null;
+let _intervalRef = null;
+
+function cleanupOnContextInvalidation() {
+  try {
+    if (_observerRef) { _observerRef.disconnect(); _observerRef = null; }
+    if (_intervalRef) { clearInterval(_intervalRef); _intervalRef = null; }
+  } catch (e) { /* zaten temizlendi */ }
+}
+
 function initialize() {
   console.log('🚀 TradingView Simple Logger: Başlatılıyor...');
+
+  // Sadece ana chart sayfasında çalış (iframe'leri filtrele)
+  if (window.self !== window.top) {
+    console.log('ℹ️ iframe context, logger başlatılmadı.');
+    return;
+  }
 
   // İlk sembol kontrolü (sayfa yüklendikten sonra)
   setTimeout(checkSymbolChange, 2000);
 
-  // Title değişimlerini izle (sembol değişimi için en az maliyetli yöntem)
-  const titleObserver = new MutationObserver(checkSymbolChange);
+  // Title değişimlerini izle — childList + subtree + characterData gerekli
+  // TradingView text node'u replace edebilir (characterData) veya yeni node ekleyebilir (childList)
+  _observerRef = new MutationObserver(() => {
+    try {
+      if (!chrome.runtime?.id) { cleanupOnContextInvalidation(); return; }
+      checkSymbolChange();
+    } catch (e) {
+      if (e.message?.includes('Extension context invalidated')) {
+        cleanupOnContextInvalidation();
+      }
+    }
+  });
+
   const titleElem = document.querySelector('title');
   if (titleElem) {
-    titleObserver.observe(titleElem, { childList: true });
+    _observerRef.observe(titleElem, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
+  } else {
+    // title elementi yoksa document.head'i izle (dinamik ekleme için)
+    _observerRef.observe(document.head || document.documentElement, {
+      childList: true,
+      subtree: true
+    });
   }
 
-  // Periyodik kontrol (yedek)
-  setInterval(checkSymbolChange, 5000);
+  // Periyodik kontrol — observer'ın kaçırdığı değişimleri yakalar
+  _intervalRef = setInterval(() => {
+    try {
+      if (!chrome.runtime?.id) { cleanupOnContextInvalidation(); return; }
+      checkSymbolChange();
+    } catch (e) {
+      if (e.message?.includes('Extension context invalidated')) {
+        cleanupOnContextInvalidation();
+      }
+    }
+  }, 3000);
 
   console.log('✅ Simple Logger aktif!');
 }
 
 // Sayfa kapanırken son durumu logla
+// NOT: beforeunload'da chrome.runtime.sendMessage güvenilmez (async kesilir).
+// Doğrudan chrome.storage.local.set kullanıyoruz — daha güvenilir.
 window.addEventListener('beforeunload', () => {
-  if (currentSymbol && currentSymbol !== 'Bilinmiyor') {
-    sendLog('Oturum Kapandı', {
-      sembol: currentSymbol,
-      fiyat: extractCurrentPrice()
+  if (!currentSymbol || currentSymbol === 'Bilinmiyor') return;
+  if (!chrome.runtime?.id) return;
+
+  try {
+    const log = {
+      timestamp: Date.now(),
+      date: new Date().toLocaleDateString('tr-TR'),
+      time: new Date().toLocaleTimeString('tr-TR'),
+      action: 'Oturum Kapandı',
+      details: { sembol: currentSymbol, fiyat: extractCurrentPrice() },
+      symbol: currentSymbol,
+      price: extractCurrentPrice()
+    };
+
+    // Storage'a doğrudan yaz — sendMessage yerine
+    // Chrome bu işlemi beforeunload'da tamamlamaya çalışır
+    chrome.storage.local.get(['activityLogs'], (result) => {
+      const logs = result.activityLogs || [];
+      logs.push(log);
+      if (logs.length > 1000) logs.splice(0, logs.length - 1000);
+      chrome.storage.local.set({ activityLogs: logs });
     });
+  } catch (e) {
+    // Context invalidated veya başka hata — sessizce geç
   }
 });
 
