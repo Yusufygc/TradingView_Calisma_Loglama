@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>TradingView Logger</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="header-top">
+      <h1>📊 TradingView Logger</h1>
+      <div class="header-actions">
+        <span class="version-badge">v3.1</span>
+        <button id="pinBtn" class="pin-btn" title="Büyük pencerede aç">⧉</button>
+      </div>
+    </div>
+    <div class="header-live">
+      <span class="live-dot"></span>
+      <span id="liveSymbol">Bekleniyor...</span>
+      <span class="live-price"   id="livePrice"></span>
+      <span class="live-session" id="liveSession"></span>
+    </div>
+  </header>
+
+  <!-- ── Tabs ── -->
+  <div class="tabs">
+    <button class="tab active" data-tab="logs">📋 Loglar</button>
+    <button class="tab"        data-tab="notes">📝 Notlar</button>
+    <button class="tab"        data-tab="stats">📈 İstatistik</button>
+    <button class="tab"        data-tab="archive">🗄️ Arşiv</button>
+  </div>
+
+  <!-- ══════════ LOGS TAB ══════════ -->
+  <div class="tab-content active" id="logs-tab">
+    <div class="stats-container">
+      <div class="stat-card">
+        <div class="number" id="totalLogs">0</div>
+        <div class="label">Toplam Kayıt</div>
+      </div>
+      <div class="stat-card">
+        <div class="number" id="todayLogs">0</div>
+        <div class="label">Bugün</div>
+      </div>
+      <div class="stat-card">
+        <div class="number accent" id="topSymbol">—</div>
+        <div class="label">En Çok Bakılan</div>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <div class="search-input-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="logSearch" placeholder="Hisse ara... (ör: PGSUS)"
+               autocomplete="off" spellcheck="false" />
+        <button class="case-toggle" id="caseToggle" title="Büyük/küçük harf duyarlılığı">Aa</button>
+        <button class="clear-search" id="clearSearch" style="display:none">✕</button>
+      </div>
+      <div class="filter-row">
+        <select id="actionFilter" class="filter-select">
+          <option value="">Tüm Aksiyonlar</option>
+          <option value="Başladı">Oturum Başladı</option>
+          <option value="Değişti">Sembol Değişti</option>
+          <option value="Kapandı">Oturum Kapandı</option>
+        </select>
+        <select id="sortOrder" class="filter-select">
+          <option value="desc">En Yeni Önce</option>
+          <option value="asc">En Eski Önce</option>
+        </select>
+      </div>
+      <div class="search-result-info" id="searchResultInfo" style="display:none"></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-secondary" id="exportCSV">📥 CSV İndir</button>
+      <button class="btn btn-danger"    id="clearLogs">🗑️ Bugünü Temizle</button>
+    </div>
+
+    <div class="logs-container" id="logsContainer">
+      <p class="empty-state">Henüz log yok. TradingView'de bir hisse açın.</p>
+    </div>
+  </div>
+
+  <!-- ══════════ NOTES TAB ══════════ -->
+  <div class="tab-content" id="notes-tab">
+    <div class="current-note-section">
+      <div class="note-header">
+        <span class="note-symbol" id="currentSymbol">--</span>
+        <span class="note-badge"  id="noteBadge"></span>
+      </div>
+      <div id="tagEditorWrap" class="tag-editor-wrap"></div>
+      <textarea id="noteInput"
+                placeholder="Bu hisse için notunuzu yazın... (Ctrl+Enter ile kaydet)"
+                rows="3"></textarea>
+      <div class="note-actions-row">
+        <button class="btn btn-primary"   id="saveNote">💾 Kaydet</button>
+        <button class="btn btn-secondary" id="clearNote">🗑️ Temizle</button>
+      </div>
+    </div>
+
+    <div class="notes-divider"><span>Tüm Notlar</span></div>
+    <div id="tagFilterBar" class="tag-filter-bar"></div>
+    <div class="note-search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="noteSearch" placeholder="Not veya sembol ara..."
+             autocomplete="off" spellcheck="false" />
+      <button class="clear-search" id="clearNoteSearch" style="display:none">✕</button>
+    </div>
+    <div class="all-notes-container" id="allNotesContainer">
+      <p class="empty-state">Henüz not yok.</p>
+    </div>
+  </div>
+
+  <!-- ══════════ STATS TAB ══════════ -->
+  <div class="tab-content" id="stats-tab">
+    <div class="stats-summary" id="statsSummary">
+      <p class="empty-state">Yükleniyor...</p>
+    </div>
+  </div>
+
+  <!-- ══════════ ARCHIVE TAB ══════════ -->
+  <div class="tab-content" id="archive-tab">
+
+    <!-- Depolama bilgisi -->
+    <div id="storageInfoBar" class="storage-info-bar"></div>
+
+    <!-- Üst araç çubuğu -->
+    <div class="archive-toolbar">
+      <div class="search-input-wrap" style="flex:1;margin-bottom:0">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="archiveSearch" placeholder="Gün ara... (ör: 2025-04)"
+               autocomplete="off" spellcheck="false" />
+        <button class="clear-search" id="clearArchiveSearch" style="display:none">✕</button>
+      </div>
+      <button class="btn btn-secondary" id="exportAllArchiveBtn"
+              style="width:auto;padding:8px 12px;white-space:nowrap">
+        📦 Tümünü İndir
+      </button>
+      <button class="btn btn-secondary" id="archiveNowBtn"
+              title="Dünü şimdi arşivle" style="width:auto;padding:8px 10px">
+        🗄️
+      </button>
+    </div>
+
+    <!-- Split layout: gün listesi + gün detayı -->
+    <div class="archive-split">
+      <div class="archive-day-list" id="archiveDayList">
+        <p class="empty-state">Yükleniyor...</p>
+      </div>
+      <div class="archive-day-detail" id="archiveDayDetail">
+        <p class="empty-state" style="padding:20px">Soldan bir gün seçin.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <small id="footerHint">💡 Loglar otomatik arşivlenir · OPFS depolama</small>
+  </footer>
+</div>
+
+<script src="../shared/constants.js"></script>
+<script src="../shared/utils.js"></script>
+<script src="../shared/storage.js"></script>
+<script src="csv-exporter.js"></script>
+<script src="logs.js"></script>
+<script src="notes.js"></script>
+<script src="stats.js"></script>
+<script src="archive.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>
