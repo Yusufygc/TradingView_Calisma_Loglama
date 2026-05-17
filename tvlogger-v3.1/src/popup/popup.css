@@ -447,6 +447,16 @@ body.pinned .archive-split { height: 60vh; }
 .setting-field input:focus {
   border-color: var(--border-focus);
 }
+.secret-state {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.4;
+  margin-top: 5px;
+}
+.secret-state.has-secret {
+  color: var(--success);
+}
 .switch {
   display: inline-flex;
   flex-shrink: 0;
