@@ -220,17 +220,7 @@ async function sendTelegramNoteUpdate(note) {
   if (!note?.symbol || !note?.text) {
     return { success: false, error: 'Not bildirimi eksik.' };
   }
-  const trimmed = String(note.text).trim();
-  const preview = trimmed.length > 700 ? `${trimmed.slice(0, 700)}...` : trimmed;
-  const lines = [
-    'TradingView Logger - Not Guncellendi',
-    '',
-    `Sembol: ${note.symbol}`,
-    `Zaman: ${new Date(note.updatedAt || Date.now()).toLocaleString('tr-TR')}`,
-    '',
-    preview,
-  ];
-  return await sendTelegramMessage(lines.join('\n'), {
+  return await sendTelegramMessage(buildTelegramNoteMessage(note), {
     type: 'note_updated',
     symbol: note.symbol,
     updatedAt: note.updatedAt || Date.now(),
@@ -243,19 +233,27 @@ function buildTelegramLogSummary(title, logs, notes = {}, tags = {}) {
   }
 
   const bySymbol = {};
+  const lastPriceBySymbol = {};
   let totalMs = 0;
   for (const log of logs) {
     const sym = log.symbol || log.details?.sembol || log.details?.yeni || 'Bilinmiyor';
     bySymbol[sym] = (bySymbol[sym] || 0) + 1;
+    if (hasTelegramValue(log.price)) {
+      lastPriceBySymbol[sym] = log.price;
+    } else if (hasTelegramValue(log.details?.fiyat)) {
+      lastPriceBySymbol[sym] = log.details.fiyat;
+    }
     totalMs += log.sessionMs || 0;
   }
 
-  const topSymbols = Object.entries(bySymbol)
+  const topSymbolLines = Object.entries(bySymbol)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
-    .map(([sym, count]) => `${sym} (${count})`);
+    .map(([sym, count], idx) => (
+      `${idx + 1}. ${sym} - ${count} kayit - son fiyat: ${formatTelegramValue(lastPriceBySymbol[sym])}`
+    ));
 
-  const notedSymbols = Object.keys(bySymbol)
+  const notedSymbolLines = Object.keys(bySymbol)
     .filter(sym => notes[sym]?.note || tags[sym]?.length)
     .slice(0, 6)
     .map(sym => {
@@ -267,22 +265,55 @@ function buildTelegramLogSummary(title, logs, notes = {}, tags = {}) {
     });
 
   const last = logs[logs.length - 1];
+  const lastSymbol = last.symbol || last.details?.sembol || last.details?.yeni || '-';
   const lines = [
-    `TradingView Logger - ${title}`,
+    'TradingView Logger',
+    title.replace(/\(([^)]+)\)/, '- $1'),
     '',
+    'Ozet',
     `Toplam kayit: ${logs.length}`,
-    `Farkli sembol: ${Object.keys(bySymbol).length}`,
+    `Farkli hisse: ${Object.keys(bySymbol).length}`,
     `Toplam sure: ${formatTelegramDuration(totalMs)}`,
-    `Son kayit: ${(last.date || '-') + ' ' + (last.time || '-')}`,
     '',
-    `En cok bakilan: ${topSymbols.join(', ') || '-'}`,
+    'Son kayit',
+    `Hisse: ${lastSymbol}`,
+    `Fiyat: ${formatTelegramValue(last.price || last.details?.fiyat)}`,
+    `Zaman: ${(last.date || '-') + ' ' + (last.time || '-')}`,
+    '',
+    'En cok bakilanlar',
+    topSymbolLines.join('\n') || '-',
   ];
 
-  if (notedSymbols.length) {
-    lines.push('', `Notlu/etiketli: ${notedSymbols.join(' | ')}`);
+  if (notedSymbolLines.length) {
+    lines.push('', 'Notlu / etiketli', notedSymbolLines.join('\n'));
   }
 
   return lines.join('\n').slice(0, 3800);
+}
+
+function buildTelegramNoteMessage(note) {
+  const trimmed = String(note.text).trim();
+  const preview = trimmed.length > 700 ? `${trimmed.slice(0, 700)}...` : trimmed;
+  return [
+    'TradingView Logger',
+    'Not Guncellendi',
+    '',
+    `Hisse: ${note.symbol}`,
+    `Fiyat: ${formatTelegramValue(note.price)}`,
+    `Zaman: ${new Date(note.updatedAt || Date.now()).toLocaleString('tr-TR')}`,
+    '',
+    'Not:',
+    preview,
+  ].join('\n');
+}
+
+function hasTelegramValue(value) {
+  const text = String(value ?? '').trim();
+  return Boolean(text && text !== '-');
+}
+
+function formatTelegramValue(value) {
+  return hasTelegramValue(value) ? String(value).trim() : '-';
 }
 
 function formatTelegramDuration(ms) {
