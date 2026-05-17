@@ -1,0 +1,3 @@
+telegram-proxy/.dev.vars
+telegram-proxy/.wrangler/
+telegram-proxy/wrangler.toml

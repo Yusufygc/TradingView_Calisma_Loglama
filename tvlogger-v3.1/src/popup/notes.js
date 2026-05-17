@@ -204,10 +204,17 @@ const NotesModule = (() => {
     const text = document.getElementById('noteInput').value.trim();
     if (!sym) return;
 
-    if (text) allNotes[sym] = { note: text, updatedAt: Date.now() };
+    const updatedAt = Date.now();
+    if (text) allNotes[sym] = { note: text, updatedAt };
     else      delete allNotes[sym];
 
     await chrome.storage.local.set({ [STORAGE_KEYS.NOTES]: allNotes });
+    if (text) {
+      chrome.runtime.sendMessage({
+        type: 'TELEGRAM_NOTE_UPDATED',
+        note: { symbol: sym, text, updatedAt },
+      });
+    }
     renderNotes(document.getElementById('noteSearch').value);
     refreshCurrentNote();
 

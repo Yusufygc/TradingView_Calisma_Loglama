@@ -1,21 +1,17 @@
-// TradingView Logger — Background Service Worker v3.1
-// ======================================================
-// Sorumluluklar:
-//   1. Gelen logları TODAY buffer'a (chrome.storage.local) yazar
-//   2. Gün değişimini tespit edip dünü OPFS'e arşivler
-//   3. Popup'tan ARCHIVE_NOW / EXPORT_ARCHIVE / GET_STORAGE_INFO mesajlarını işler
-//   4. İlk çalışmada eski activityLogs verisini OPFS'e migrate eder
-//   5. Pinned window açar
+// TradingView Logger - Background Service Worker v3.1
+// Responsibilities:
+// 1. Persist incoming logs to today's chrome.storage.local buffer
+// 2. Archive older days to OPFS
+// 3. Handle popup archive/storage/pinned-window requests
+// 4. Migrate legacy activityLogs data
+// 5. Forward selected events to a Telegram backend/proxy
 
 importScripts('../shared/constants.js', '../shared/storage.js');
-
-// ── Mesaj dinleyici ──────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
       switch (msg.type) {
-
         case 'LOG_ACTIVITY':
           await handleIncomingLog(msg.log);
           sendResponse({ success: true });
@@ -26,15 +22,32 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           sendResponse({ success: true });
           break;
 
-        case 'EXPORT_ARCHIVE':
+        case 'EXPORT_ARCHIVE': {
           const csv = await StorageManager.exportAllAsCSV();
           sendResponse({ success: true, csv });
           break;
+        }
 
-        case 'GET_STORAGE_INFO':
+        case 'GET_STORAGE_INFO': {
           const info  = await StorageManager.getStorageInfo();
           const local = await chrome.storage.local.getBytesInUse();
           sendResponse({ success: true, info: { ...info, localBytes: local } });
+          break;
+        }
+
+        case 'TELEGRAM_TEST':
+          sendResponse(await sendTelegramMessage('TradingView Logger baglanti testi basarili.', {
+            type: 'test',
+            sentAt: Date.now(),
+          }));
+          break;
+
+        case 'TELEGRAM_SEND_TODAY_SUMMARY':
+          sendResponse(await sendTodayTelegramSummary());
+          break;
+
+        case 'TELEGRAM_NOTE_UPDATED':
+          sendResponse(await sendTelegramNoteUpdate(msg.note));
           break;
 
         case 'OPEN_PINNED':
@@ -53,8 +66,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-// ── Log kayıt ────────────────────────────────────────────────────────────
-
 async function handleIncomingLog(log) {
   const logDay = log.timestamp ? dateKey(new Date(log.timestamp)) : dateKey();
   const today  = dateKey();
@@ -71,8 +82,6 @@ async function handleIncomingLog(log) {
 
   await archiveYesterdayIfNeeded();
 }
-
-// ── Arşivleme ────────────────────────────────────────────────────────────
 
 async function archiveYesterdayIfNeeded() {
   const res         = await chrome.storage.local.get([STORAGE_KEYS.LAST_ARCHIVE_DATE]);
@@ -113,7 +122,6 @@ async function archiveDayIfNeeded(targetDay) {
     await StorageManager.writeDay(targetDay, toArchive);
   }
 
-  // Index güncelle
   if (!index.includes(targetDay)) {
     index.unshift(targetDay);
     index.sort((a, b) => b.localeCompare(a));
@@ -125,10 +133,168 @@ async function archiveDayIfNeeded(targetDay) {
     [STORAGE_KEYS.LAST_ARCHIVE_DATE]: targetDay,
   });
 
-  console.log(`[Archiver] ${targetDay}: ${toArchive.length} log arşivlendi.`);
+  console.log(`[Archiver] ${targetDay}: ${toArchive.length} log archived.`);
+
+  if (toArchive.length) {
+    await sendTelegramDailySummary(targetDay, toArchive, { type: 'daily_archive' });
+  }
 }
 
-// ── Pinned window ─────────────────────────────────────────────────────────
+async function getTelegramSettings() {
+  const keys = [
+    STORAGE_KEYS.TELEGRAM_ENABLED,
+    STORAGE_KEYS.TELEGRAM_ENDPOINT_URL,
+    STORAGE_KEYS.TELEGRAM_CLIENT_SECRET,
+    STORAGE_KEYS.TELEGRAM_CHAT_ID,
+  ];
+  const res = await chrome.storage.local.get(keys);
+  return {
+    enabled:      Boolean(res[STORAGE_KEYS.TELEGRAM_ENABLED]),
+    endpointUrl:  String(res[STORAGE_KEYS.TELEGRAM_ENDPOINT_URL] || '').trim(),
+    clientSecret: String(res[STORAGE_KEYS.TELEGRAM_CLIENT_SECRET] || '').trim(),
+    chatId:       String(res[STORAGE_KEYS.TELEGRAM_CHAT_ID] || '').trim(),
+  };
+}
+
+async function sendTelegramMessage(text, meta = {}) {
+  try {
+    const settings = await getTelegramSettings();
+    if (!settings.enabled) {
+      return { success: false, error: 'Telegram kapali.' };
+    }
+    if (!settings.endpointUrl) {
+      return { success: false, error: 'Telegram endpoint URL eksik.' };
+    }
+    if (!/^https?:\/\//i.test(settings.endpointUrl)) {
+      return { success: false, error: 'Endpoint URL http veya https ile baslamali.' };
+    }
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (settings.clientSecret) headers['X-Client-Secret'] = settings.clientSecret;
+
+    const response = await fetch(settings.endpointUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        text: String(text || '').slice(0, 3800),
+        chatId: settings.chatId || undefined,
+        meta,
+      }),
+    });
+
+    const bodyText = await response.text();
+    let body = {};
+    try { body = bodyText ? JSON.parse(bodyText) : {}; } catch { body = { raw: bodyText }; }
+
+    if (!response.ok || body.ok === false) {
+      return {
+        success: false,
+        error: body.error || body.description || `Telegram proxy hatasi: ${response.status}`,
+      };
+    }
+    return { success: true, response: body };
+  } catch (e) {
+    console.warn('[Telegram]', e);
+    return { success: false, error: e.message || 'Telegram gonderimi basarisiz.' };
+  }
+}
+
+async function sendTodayTelegramSummary() {
+  const res   = await chrome.storage.local.get([STORAGE_KEYS.TODAY, STORAGE_KEYS.NOTES, STORAGE_KEYS.TAGS]);
+  const logs  = res[STORAGE_KEYS.TODAY] || [];
+  const notes = res[STORAGE_KEYS.NOTES] || {};
+  const tags  = res[STORAGE_KEYS.TAGS] || {};
+  const text  = buildTelegramLogSummary(`Bugun Ozeti (${dateKey()})`, logs, notes, tags);
+  return await sendTelegramMessage(text, { type: 'today_summary', date: dateKey(), count: logs.length });
+}
+
+async function sendTelegramDailySummary(day, logs, meta = {}) {
+  const res   = await chrome.storage.local.get([STORAGE_KEYS.NOTES, STORAGE_KEYS.TAGS]);
+  const notes = res[STORAGE_KEYS.NOTES] || {};
+  const tags  = res[STORAGE_KEYS.TAGS] || {};
+  const text  = buildTelegramLogSummary(`Gunluk Arsiv Ozeti (${day})`, logs, notes, tags);
+  return await sendTelegramMessage(text, { ...meta, date: day, count: logs.length });
+}
+
+async function sendTelegramNoteUpdate(note) {
+  if (!note?.symbol || !note?.text) {
+    return { success: false, error: 'Not bildirimi eksik.' };
+  }
+  const trimmed = String(note.text).trim();
+  const preview = trimmed.length > 700 ? `${trimmed.slice(0, 700)}...` : trimmed;
+  const lines = [
+    'TradingView Logger - Not Guncellendi',
+    '',
+    `Sembol: ${note.symbol}`,
+    `Zaman: ${new Date(note.updatedAt || Date.now()).toLocaleString('tr-TR')}`,
+    '',
+    preview,
+  ];
+  return await sendTelegramMessage(lines.join('\n'), {
+    type: 'note_updated',
+    symbol: note.symbol,
+    updatedAt: note.updatedAt || Date.now(),
+  });
+}
+
+function buildTelegramLogSummary(title, logs, notes = {}, tags = {}) {
+  if (!logs.length) {
+    return `${title}\n\nKayit yok.`;
+  }
+
+  const bySymbol = {};
+  let totalMs = 0;
+  for (const log of logs) {
+    const sym = log.symbol || log.details?.sembol || log.details?.yeni || 'Bilinmiyor';
+    bySymbol[sym] = (bySymbol[sym] || 0) + 1;
+    totalMs += log.sessionMs || 0;
+  }
+
+  const topSymbols = Object.entries(bySymbol)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([sym, count]) => `${sym} (${count})`);
+
+  const notedSymbols = Object.keys(bySymbol)
+    .filter(sym => notes[sym]?.note || tags[sym]?.length)
+    .slice(0, 6)
+    .map(sym => {
+      const tagText = (tags[sym] || []).map(id => {
+        const def = PREDEFINED_TAGS.find(t => t.id === id);
+        return def ? def.label : id;
+      }).join(', ');
+      return tagText ? `${sym}: ${tagText}` : sym;
+    });
+
+  const last = logs[logs.length - 1];
+  const lines = [
+    `TradingView Logger - ${title}`,
+    '',
+    `Toplam kayit: ${logs.length}`,
+    `Farkli sembol: ${Object.keys(bySymbol).length}`,
+    `Toplam sure: ${formatTelegramDuration(totalMs)}`,
+    `Son kayit: ${(last.date || '-') + ' ' + (last.time || '-')}`,
+    '',
+    `En cok bakilan: ${topSymbols.join(', ') || '-'}`,
+  ];
+
+  if (notedSymbols.length) {
+    lines.push('', `Notlu/etiketli: ${notedSymbols.join(' | ')}`);
+  }
+
+  return lines.join('\n').slice(0, 3800);
+}
+
+function formatTelegramDuration(ms) {
+  if (!ms || ms <= 0) return '-';
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}s ${m}dk`;
+  if (m > 0) return `${m}dk ${s}sn`;
+  return `${s}sn`;
+}
 
 async function openPinnedWindow() {
   const url     = chrome.runtime.getURL('src/popup/popup.html') + '?pinned=1';
@@ -144,12 +310,10 @@ async function openPinnedWindow() {
   chrome.windows.create({ url, type: 'popup', width: 680, height: 900, top: 80, left: 100 });
 }
 
-// ── Kurulum & Migration ───────────────────────────────────────────────────
-
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   if (reason === 'install') {
     await chrome.storage.local.set({ [STORAGE_KEYS.TODAY]: [] });
-    console.log('[Logger] İlk kurulum tamamlandı.');
+    console.log('[Logger] First install completed.');
   }
   if (reason === 'update' || reason === 'install') {
     await migrateLegacyData();
@@ -162,7 +326,7 @@ async function migrateLegacyData() {
     const legacy = res[STORAGE_KEYS.LOGS_LEGACY];
     if (!legacy?.length) return;
 
-    console.log(`[Migration] ${legacy.length} eski log taşınıyor...`);
+    console.log(`[Migration] Moving ${legacy.length} legacy logs...`);
     await StorageManager.migrateFromLegacy(legacy);
 
     const today     = dateKey();
@@ -174,8 +338,8 @@ async function migrateLegacyData() {
       [STORAGE_KEYS.TODAY]:       [...existing, ...todayLogs],
       [STORAGE_KEYS.LOGS_LEGACY]: null,
     });
-    console.log('[Migration] Tamamlandı.');
+    console.log('[Migration] Completed.');
   } catch (e) {
-    console.error('[Migration] Hata:', e);
+    console.error('[Migration] Error:', e);
   }
 }

@@ -394,3 +394,105 @@ body.pinned .archive-split { height: 60vh; }
 .archive-sym-chip.muted { color: var(--text-muted); background: transparent; }
 
 .archive-log-list .log-item { padding: 7px 10px; }
+
+/* Telegram Tab */
+.telegram-settings {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--rs);
+  padding: 12px;
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.setting-title {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+.setting-hint {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.setting-field {
+  display: block;
+  margin-bottom: 9px;
+}
+.setting-field span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+}
+.setting-field input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--rx);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+  padding: 8px 10px;
+}
+.setting-field input:focus {
+  border-color: var(--border-focus);
+}
+.switch {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.switch input {
+  display: none;
+}
+.switch span {
+  width: 38px;
+  height: 21px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  cursor: pointer;
+  position: relative;
+  transition: all var(--tr);
+}
+.switch span::after {
+  content: '';
+  width: 15px;
+  height: 15px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  left: 2px;
+  position: absolute;
+  top: 2px;
+  transition: all var(--tr);
+}
+.switch input:checked + span {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+.switch input:checked + span::after {
+  background: var(--accent);
+  transform: translateX(17px);
+}
+.telegram-wide-btn {
+  width: 100%;
+  margin-bottom: 10px;
+}
+.telegram-status {
+  min-height: 18px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+}
+.telegram-status.ok { color: var(--success); }
+.telegram-status.err { color: var(--danger); }

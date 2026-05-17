@@ -31,6 +31,7 @@
     <button class="tab"        data-tab="notes">📝 Notlar</button>
     <button class="tab"        data-tab="stats">📈 İstatistik</button>
     <button class="tab"        data-tab="archive">🗄️ Arşiv</button>
+    <button class="tab"        data-tab="telegram">Telegram</button>
   </div>
 
   <!-- ══════════ LOGS TAB ══════════ -->
@@ -155,6 +156,48 @@
     </div>
   </div>
 
+  <!-- ══════════ TELEGRAM TAB ══════════ -->
+  <div class="tab-content" id="telegram-tab">
+    <div class="telegram-settings">
+      <div class="setting-row toggle-row">
+        <div>
+          <div class="setting-title">Telegram bildirimleri</div>
+          <div class="setting-hint">Bot token eklentide tutulmaz; proxy endpoint kullanilir.</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="telegramEnabled">
+          <span></span>
+        </label>
+      </div>
+
+      <label class="setting-field">
+        <span>Endpoint URL</span>
+        <input type="url" id="telegramEndpointUrl" placeholder="https://example.workers.dev/telegram/send" spellcheck="false">
+      </label>
+
+      <label class="setting-field">
+        <span>Chat ID</span>
+        <input type="text" id="telegramChatId" placeholder="123456789 veya -100..." spellcheck="false">
+      </label>
+
+      <label class="setting-field">
+        <span>Client secret</span>
+        <input type="password" id="telegramClientSecret" placeholder="Opsiyonel" spellcheck="false">
+      </label>
+
+      <div class="controls">
+        <button class="btn btn-primary" id="saveTelegramSettings">Kaydet</button>
+        <button class="btn btn-secondary" id="testTelegram">Test</button>
+      </div>
+
+      <button class="btn btn-secondary telegram-wide-btn" id="sendTelegramToday">
+        Bugunun Ozetini Gonder
+      </button>
+
+      <div class="telegram-status" id="telegramStatus"></div>
+    </div>
+  </div>
+
   <footer>
     <small id="footerHint">💡 Loglar otomatik arşivlenir · OPFS depolama</small>
   </footer>
@@ -168,6 +211,7 @@
 <script src="notes.js"></script>
 <script src="stats.js"></script>
 <script src="archive.js"></script>
+<script src="telegram.js"></script>
 <script src="popup.js"></script>
 </body>
 </html>

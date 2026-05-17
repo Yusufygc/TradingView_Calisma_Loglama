@@ -9,6 +9,10 @@ const STORAGE_KEYS = {
   TIME_LOG:   'stockTimeLog',
   TAGS:       'stockTags',
   LAST_ARCHIVE_DATE: 'lastArchiveDate', // son arşiv tarihi
+  TELEGRAM_ENABLED: 'telegramEnabled',
+  TELEGRAM_ENDPOINT_URL: 'telegramEndpointUrl',
+  TELEGRAM_CLIENT_SECRET: 'telegramClientSecret',
+  TELEGRAM_CHAT_ID: 'telegramChatId',
 
   // Eski key — migration için tutuldu, v3.1'de kaldırılacak
   LOGS_LEGACY: 'activityLogs',

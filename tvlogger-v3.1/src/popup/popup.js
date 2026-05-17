@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (tabContent) tabContent.classList.add('active');
       if (tab.dataset.tab === 'stats')   StatsModule.load();
       if (tab.dataset.tab === 'archive') ArchiveModule.load();
+      if (tab.dataset.tab === 'telegram') TelegramModule.load();
     });
   });
 
@@ -134,6 +135,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ── Verileri yükle ─────────────────────────────────
   await LogsModule.load();
   await NotesModule.load();
+  await TelegramModule.load();
 
   // ── Aktif TradingView sekmesini bul ────────────────
   try {
