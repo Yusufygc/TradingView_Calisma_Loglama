@@ -20,8 +20,9 @@ const TelegramModule = (() => {
       el('telegramEndpointUrl').value = res[STORAGE_KEYS.TELEGRAM_ENDPOINT_URL] || '';
     }
     if (el('telegramClientSecret')) {
-      el('telegramClientSecret').value = res[STORAGE_KEYS.TELEGRAM_CLIENT_SECRET] || '';
+      el('telegramClientSecret').value = '';
     }
+    updateSecretState(Boolean(res[STORAGE_KEYS.TELEGRAM_CLIENT_SECRET]));
     if (el('telegramChatId')) {
       el('telegramChatId').value = res[STORAGE_KEYS.TELEGRAM_CHAT_ID] || '';
     }
@@ -49,16 +50,20 @@ const TelegramModule = (() => {
     const clientSecret = el('telegramClientSecret')?.value.trim() || '';
     const chatId = el('telegramChatId')?.value.trim() || '';
     const enabled = Boolean(el('telegramEnabled')?.checked);
+    const existing = await chrome.storage.local.get([STORAGE_KEYS.TELEGRAM_CLIENT_SECRET]);
+    const nextClientSecret = clientSecret || existing[STORAGE_KEYS.TELEGRAM_CLIENT_SECRET] || '';
 
     await chrome.storage.local.set({
       [STORAGE_KEYS.TELEGRAM_ENABLED]: enabled,
       [STORAGE_KEYS.TELEGRAM_ENDPOINT_URL]: endpointUrl,
-      [STORAGE_KEYS.TELEGRAM_CLIENT_SECRET]: clientSecret,
+      [STORAGE_KEYS.TELEGRAM_CLIENT_SECRET]: nextClientSecret,
       [STORAGE_KEYS.TELEGRAM_CHAT_ID]: chatId,
     });
 
+    if (el('telegramClientSecret')) el('telegramClientSecret').value = '';
+    updateSecretState(Boolean(nextClientSecret));
     setStatus('Telegram ayarlari kaydedildi.', 'ok');
-    return { enabled, endpointUrl, clientSecret, chatId };
+    return { enabled, endpointUrl, clientSecret: nextClientSecret, chatId };
   }
 
   async function test() {
@@ -120,6 +125,15 @@ const TelegramModule = (() => {
     if (!status) return;
     status.className = `telegram-status ${type}`.trim();
     status.textContent = message || '';
+  }
+
+  function updateSecretState(hasSecret) {
+    const state = el('telegramSecretState');
+    if (!state) return;
+    state.className = hasSecret ? 'secret-state has-secret' : 'secret-state';
+    state.textContent = hasSecret
+      ? 'Client secret kayitli. Degistirmek icin yeni deger girin.'
+      : 'Client secret kayitli degil.';
   }
 
   return { load };
