@@ -141,7 +141,7 @@ async function openPinnedWindow() {
       }
     }
   }
-  chrome.windows.create({ url, type: 'popup', width: 680, height: 780, top: 80, left: 100 });
+  chrome.windows.create({ url, type: 'popup', width: 680, height: 900, top: 80, left: 100 });
 }
 
 // ── Kurulum & Migration ───────────────────────────────────────────────────
