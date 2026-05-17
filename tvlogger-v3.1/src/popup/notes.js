@@ -210,9 +210,10 @@ const NotesModule = (() => {
 
     await chrome.storage.local.set({ [STORAGE_KEYS.NOTES]: allNotes });
     if (text) {
+      const livePrice = document.getElementById('livePrice')?.textContent.trim() || '';
       chrome.runtime.sendMessage({
         type: 'TELEGRAM_NOTE_UPDATED',
-        note: { symbol: sym, text, updatedAt },
+        note: { symbol: sym, text, price: livePrice, updatedAt },
       });
     }
     renderNotes(document.getElementById('noteSearch').value);
