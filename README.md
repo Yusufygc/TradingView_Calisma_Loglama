@@ -26,7 +26,7 @@ Bir hisseye tekrar girdiğinizde:
 - Yüzdesel değişimi hesaplar (▲ Yükseldi / ▼ Düştü / ➡️ Değişmedi)
 
 <!-- EKRAN GÖRÜNTÜSÜ: Fiyat karşılaştırma toast -->
-![Fiyat Karşılaştırma](screenshots/price_compare.png)
+![Fiyat Karşılaştırma](screenshots/price_alert.png)
 
 ---
 
@@ -38,6 +38,10 @@ Bir hisseye tekrar girdiğinizde:
 <!-- EKRAN GÖRÜNTÜSÜ: Notlar sekmesi -->
 ![Notlar Sekmesi](screenshots/notes_tab.png)
 
+### 📝 CSV dosyası
+- Yatırım aracı üzerinde çalışılan tarih, saat ve fiyat bilgisi
+<!-- EKRAN GÖRÜNTÜSÜ: Notlar sekmesi -->
+![Notlar Sekmesi](screenshots/csv_export.png)
 ---
 
 ### 📥 Veri Dışa Aktarma
