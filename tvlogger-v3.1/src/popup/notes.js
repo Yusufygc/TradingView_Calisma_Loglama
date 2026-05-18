@@ -7,6 +7,7 @@ const NotesModule = (() => {
   let activeTagFilter = null;
   let editingNoteRef = null; // { symbol, id } | null
   let draftNoteTags = [];
+  let draftReminderAt = null;
 
   const NOTE_TAGS = [
     { id: 'idea_buy', label: 'Alim fikri', color: '#4caf50' },
@@ -33,6 +34,7 @@ const NotesModule = (() => {
             createdAt: Number(item?.createdAt || updatedAt),
             updatedAt,
             tags: Array.isArray(item?.tags) ? item.tags.filter(Boolean) : [],
+            reminderAt: Number(item?.reminderAt) || null,
           };
 
           if (hasStoredPrice(item)) {
@@ -126,6 +128,73 @@ const NotesModule = (() => {
     });
   }
 
+  function endOfToday() {
+    const d = new Date();
+    d.setHours(23, 59, 59, 999);
+    return d.getTime();
+  }
+
+  function addDays(days) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    d.setHours(9, 0, 0, 0);
+    return d.getTime();
+  }
+
+  function getDueReminders() {
+    const dueUntil = endOfToday();
+    return Object.entries(allNotes).flatMap(([sym, notes]) =>
+      getSymbolNotes(sym)
+        .filter(note => note.reminderAt && note.reminderAt <= dueUntil)
+        .map(note => [sym, note])
+    ).sort((a, b) => (a[1].reminderAt || 0) - (b[1].reminderAt || 0));
+  }
+
+  function renderReminderMeta(note) {
+    if (!note.reminderAt) return '';
+    return `<div class="note-reminder-meta">Tekrar bak: ${formatDetailDate(note.reminderAt)}</div>`;
+  }
+
+  function renderRemindersPanel() {
+    const notesTab = document.getElementById('notes-tab');
+    const divider = notesTab?.querySelector('.notes-divider');
+    if (!notesTab || !divider) return;
+
+    let panel = document.getElementById('dueRemindersPanel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'dueRemindersPanel';
+      panel.className = 'due-reminders-panel';
+      notesTab.insertBefore(panel, divider);
+    }
+
+    const due = getDueReminders();
+    if (!due.length) {
+      panel.innerHTML = '';
+      panel.style.display = 'none';
+      return;
+    }
+
+    panel.style.display = 'block';
+    panel.innerHTML = `
+      <div class="due-reminders-title">Bugun kontrol edilecekler</div>
+      <div class="due-reminders-list">
+        ${due.map(([sym, note]) => `
+          <button class="due-reminder-item" type="button" data-symbol="${escapeHtml(sym)}" data-note-id="${escapeHtml(note.id)}">
+            <span>${escapeHtml(sym)}</span>
+            <strong>${escapeHtml(note.note.slice(0, 80))}${note.note.length > 80 ? '...' : ''}</strong>
+          </button>
+        `).join('')}
+      </div>
+    `;
+
+    panel.querySelectorAll('.due-reminder-item').forEach(btn => {
+      btn.addEventListener('click', e => {
+        setActiveSymbol(e.currentTarget.dataset.symbol, e.currentTarget.dataset.noteId);
+      });
+    });
+  }
+
   function renderDetailTags(sym) {
     const tags = allTags[sym] || [];
     if (!tags.length) return '<span class="stock-detail-muted">Etiket yok</span>';
@@ -175,6 +244,7 @@ const NotesModule = (() => {
         <div class="stock-detail-note">
           <div class="stock-detail-note-date">${formatDetailDate(note.updatedAt)}</div>
           ${renderNoteTagChips(note.tags || []) ? `<div class="note-tag-chips">${renderNoteTagChips(note.tags || [])}</div>` : ''}
+          ${renderReminderMeta(note)}
           ${renderNotePerformance(sym, note)}
           <div>${escapeHtml(note.note)}</div>
         </div>
@@ -256,6 +326,7 @@ const NotesModule = (() => {
   function clearEditingState() {
     editingNoteRef = null;
     draftNoteTags = [];
+    draftReminderAt = null;
     document.getElementById('noteBadge')?.classList.remove('editing-note');
   }
 
@@ -274,6 +345,7 @@ const NotesModule = (() => {
     }
 
     renderTagFilterBar();
+    renderRemindersPanel();
     renderNotes(document.getElementById('noteSearch')?.value || '');
   }
 
@@ -378,6 +450,7 @@ const NotesModule = (() => {
           </div>
           ${symTags ? `<div class="note-tag-chips">${symTags}</div>` : ''}
           ${noteTags ? `<div class="note-tag-chips">${noteTags}</div>` : ''}
+          ${renderReminderMeta(data)}
           ${renderNotePerformance(sym, data)}
           <div class="note-card-text">${noteHtml}</div>
         </div>`;
@@ -404,6 +477,7 @@ const NotesModule = (() => {
         await persistNotes();
         renderNotes(document.getElementById('noteSearch')?.value || '');
         renderTagFilterBar();
+        renderRemindersPanel();
         if (window._currentSymbol === sym) refreshCurrentNote();
       });
     });
@@ -438,6 +512,7 @@ const NotesModule = (() => {
       const note = getSymbolNotes(sym).find(n => n.id === noteId);
       if (input) input.value = note?.note || '';
       draftNoteTags = [...(note?.tags || [])];
+      draftReminderAt = note?.reminderAt || null;
     } else {
       clearEditingState();
       if (input) input.value = '';
@@ -508,6 +583,13 @@ const NotesModule = (() => {
           </button>
         `).join('')}
       </div>
+      <div class="tag-editor-label tag-editor-label-spaced">Tekrar bak:</div>
+      <div class="tag-editor-chips note-reminder-editor">
+        <button class="tag-chip ${draftReminderAt ? '' : 'active'}" data-reminder-days="">Yok</button>
+        <button class="tag-chip ${isReminderDay(0) ? 'active' : ''}" data-reminder-days="0">Bugun</button>
+        <button class="tag-chip ${isReminderDay(1) ? 'active' : ''}" data-reminder-days="1">Yarin</button>
+        <button class="tag-chip ${isReminderDay(3) ? 'active' : ''}" data-reminder-days="3">3 gun</button>
+      </div>
     `;
 
     wrap.querySelectorAll('.tag-chip').forEach(btn => {
@@ -534,6 +616,20 @@ const NotesModule = (() => {
         renderTagEditor(sym);
       });
     });
+
+    wrap.querySelectorAll('.note-reminder-editor .tag-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const days = btn.dataset.reminderDays;
+        draftReminderAt = days === '' ? null : addDays(Number(days));
+        renderTagEditor(sym);
+      });
+    });
+  }
+
+  function isReminderDay(days) {
+    if (!draftReminderAt) return false;
+    const expected = new Date(addDays(days)).toDateString();
+    return new Date(draftReminderAt).toDateString() === expected;
   }
 
   async function save() {
@@ -549,12 +645,12 @@ const NotesModule = (() => {
     if (editingNoteRef?.symbol === sym) {
       const idx = list.findIndex(n => n.id === editingNoteRef.id);
       if (idx !== -1) {
-        list[idx] = { ...list[idx], note: text, tags: [...draftNoteTags], updatedAt };
+        list[idx] = { ...list[idx], note: text, tags: [...draftNoteTags], reminderAt: draftReminderAt, updatedAt };
       } else {
-        list.unshift({ id: makeNoteId(), note: text, tags: [...draftNoteTags], createdAt: updatedAt, updatedAt, ...priceSnapshot });
+        list.unshift({ id: makeNoteId(), note: text, tags: [...draftNoteTags], reminderAt: draftReminderAt, createdAt: updatedAt, updatedAt, ...priceSnapshot });
       }
     } else {
-      list.unshift({ id: makeNoteId(), note: text, tags: [...draftNoteTags], createdAt: updatedAt, updatedAt, ...priceSnapshot });
+      list.unshift({ id: makeNoteId(), note: text, tags: [...draftNoteTags], reminderAt: draftReminderAt, createdAt: updatedAt, updatedAt, ...priceSnapshot });
     }
 
     allNotes[sym] = list;
@@ -570,6 +666,7 @@ const NotesModule = (() => {
     clearEditingState();
     renderNotes(document.getElementById('noteSearch')?.value || '');
     renderTagFilterBar();
+    renderRemindersPanel();
     refreshCurrentNote();
 
     const btn = document.getElementById('saveNote');

@@ -282,6 +282,11 @@ header h1 {
   background: var(--accent-dim);
   color: var(--text-muted);
 }
+.note-reminder-meta {
+  color: var(--warning);
+  font-size: 10px;
+  margin-bottom: 6px;
+}
 .note-actions { display:flex; gap:4px; }
 .btn-icon {
   width: 30px;
@@ -415,6 +420,44 @@ header h1 {
 .stock-detail-log span { color: var(--text-muted); }
 .stock-detail-log strong { color: var(--text-primary); font-weight: 500; }
 .stock-detail-log em { color: var(--warning); font-style: normal; }
+
+.due-reminders-panel {
+  background: var(--bg-tertiary);
+  border: 1px solid rgba(255,193,7,.28);
+  border-radius: var(--rs);
+  margin-bottom: 10px;
+  padding: 10px;
+}
+.due-reminders-title {
+  color: var(--warning);
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 7px;
+  text-transform: uppercase;
+}
+.due-reminders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.due-reminder-item {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 8px;
+  align-items: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--rx);
+  color: var(--text-sec);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 7px 8px;
+  text-align: left;
+}
+.due-reminder-item:hover { border-color: var(--warning); }
+.due-reminder-item span { color: var(--accent); font-weight: 700; }
+.due-reminder-item strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ─── Stats ─── */
 .stats-scroll { max-height:400px; overflow-y:auto; padding-right:3px; }
