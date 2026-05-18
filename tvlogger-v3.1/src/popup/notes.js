@@ -180,19 +180,52 @@ const NotesModule = (() => {
       <div class="due-reminders-title">Bugun kontrol edilecekler</div>
       <div class="due-reminders-list">
         ${due.map(([sym, note]) => `
-          <button class="due-reminder-item" type="button" data-symbol="${escapeHtml(sym)}" data-note-id="${escapeHtml(note.id)}">
-            <span>${escapeHtml(sym)}</span>
-            <strong>${escapeHtml(note.note.slice(0, 80))}${note.note.length > 80 ? '...' : ''}</strong>
-          </button>
+          <div class="due-reminder-item" data-symbol="${escapeHtml(sym)}" data-note-id="${escapeHtml(note.id)}">
+            <label class="due-reminder-check" title="Kontrol edildi">
+              <input type="checkbox" aria-label="Hatirlatmayi tamamla">
+              <span></span>
+            </label>
+            <button class="due-reminder-open" type="button">
+              <span>${escapeHtml(sym)}</span>
+              <strong>${escapeHtml(note.note.slice(0, 80))}${note.note.length > 80 ? '...' : ''}</strong>
+            </button>
+          </div>
         `).join('')}
       </div>
     `;
 
-    panel.querySelectorAll('.due-reminder-item').forEach(btn => {
+    panel.querySelectorAll('.due-reminder-open').forEach(btn => {
       btn.addEventListener('click', e => {
-        setActiveSymbol(e.currentTarget.dataset.symbol, e.currentTarget.dataset.noteId);
+        const item = e.currentTarget.closest('.due-reminder-item');
+        setActiveSymbol(item.dataset.symbol, item.dataset.noteId);
       });
     });
+
+    panel.querySelectorAll('.due-reminder-check input').forEach(input => {
+      input.addEventListener('change', async e => {
+        const item = e.currentTarget.closest('.due-reminder-item');
+        await completeReminder(item.dataset.symbol, item.dataset.noteId);
+      });
+    });
+  }
+
+  async function completeReminder(sym, noteId) {
+    const notes = getSymbolNotes(sym);
+    const idx = notes.findIndex(note => note.id === noteId);
+    if (idx === -1) return;
+
+    notes[idx] = { ...notes[idx], reminderAt: null, updatedAt: Date.now() };
+    allNotes[sym] = notes;
+    await persistNotes();
+
+    if (editingNoteRef?.symbol === sym && editingNoteRef?.id === noteId) {
+      draftReminderAt = null;
+      renderTagEditor(sym);
+      refreshCurrentNote({ preserveInput: true });
+    }
+
+    renderRemindersPanel();
+    renderNotes(document.getElementById('noteSearch')?.value || '');
   }
 
   function renderDetailTags(sym) {
@@ -716,27 +749,28 @@ const NotesModule = (() => {
     const rows = getExportRows();
     const date = dateKey();
     if (format === 'json') {
-      downloadText(`tradingview-notes-${date}.json`, JSON.stringify(rows, null, 2), 'application/json');
+      downloadText(`tradingview-notes-${date}.json`, JSON.stringify(rows, null, 2), 'application/json;charset=utf-8');
       return;
     }
 
-    const headers = [
-      'symbol',
-      'note',
-      'createdAt',
-      'updatedAt',
-      'reminderAt',
-      'priceAtNote',
-      'currentPrice',
-      'performancePct',
-      'stockTags',
-      'noteTags',
+    const columns = [
+      { key: 'symbol', label: 'Hisse' },
+      { key: 'note', label: 'Yorum' },
+      { key: 'createdAt', label: 'Oluşturulma Tarihi' },
+      { key: 'updatedAt', label: 'Güncellenme Tarihi' },
+      { key: 'reminderAt', label: 'Hatırlatma Tarihi' },
+      { key: 'priceAtNote', label: 'Yorum Fiyatı' },
+      { key: 'currentPrice', label: 'Güncel Fiyat' },
+      { key: 'performancePct', label: 'Performans Yüzdesi' },
+      { key: 'stockTags', label: 'Hisse Etiketleri' },
+      { key: 'noteTags', label: 'Yorum Etiketleri' },
     ];
     const csv = [
-      headers.join(';'),
-      ...rows.map(row => headers.map(key => csvCell(row[key])).join(';')),
-    ].join('\n');
-    downloadText(`tradingview-notes-${date}.csv`, csv, 'text/csv;charset=utf-8');
+      'sep=;',
+      columns.map(column => csvCell(column.label)).join(';'),
+      ...rows.map(row => columns.map(column => csvCell(row[column.key])).join(';')),
+    ].join('\r\n');
+    downloadText(`tradingview-notes-${date}.csv`, `\uFEFF${csv}`, 'text/csv;charset=utf-8');
   }
 
   function csvCell(value) {
