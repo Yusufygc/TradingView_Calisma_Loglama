@@ -1,6 +1,6 @@
 # 📊 TradingView Logger
 
-TradingView'de hisse değişimlerinizi otomatik olarak loglayan, inceleme sürelerini takip eden, fiyat geçmişini karşılaştıran, kişisel notlar ve etiketler eklemenizi sağlayan ve isteğe bağlı olarak Telegram'a bildirim gönderen Chrome uzantısı.
+TradingView'de hisse değişimlerinizi otomatik olarak loglayan, inceleme sürelerini takip eden, fiyat geçmişini karşılaştıran, çoklu kişisel yorumlar, etiketler, tekrar bak hatırlatmaları ve isteğe bağlı Telegram bildirimleri sunan Chrome uzantısı.
 
 **Version 3.1.0**
 
@@ -51,11 +51,17 @@ Her hisse için önceden tanımlı etiketler atayabilirsiniz:
 
 ---
 
-### 📝 Hisse Notları
-- Her hisse için kişisel not ekleyebilme
-- Destek/direnç seviyeleri, analizler, hatırlatmalar
-- Hisseye girdiğinizde not toast bildirimiyle gösterilir
+### 📝 Hisse Yorumları ve Hatırlatmalar
+- Her hisse için birden fazla yorum ekleyebilme
+- Yorum eklenirken o anki fiyat snapshot'ı saklanır
+- Yorum kartında `Yorum fiyatı`, `Şimdi` ve performans yüzdesi gösterilir
+- Eski yorumlarda fiyat bilgisi yoksa `Fiyat kaydı yok` bilgisi görünür
+- Yorum bazlı etiketler: `Alım fikri`, `Risk`, `Teknik`, `Haber`, `Takip`
+- Tekrar bak hatırlatması: `Bugün`, `Yarın`, `3 gün`
+- "Bugün kontrol edilecekler" panelinden kontrol edilen yorumlar tek tıkla tamamlanır
+- Hisse detay panelinde yorumlar, etiketler, toplam süre, seans sayısı, son fiyat ve son loglar birlikte görüntülenir
 - Etiket bazlı ve metin tabanlı arama
+- Yorumlar CSV veya JSON olarak dışa aktarılabilir
 
 ![Notlar Sekmesi](screenshots/notes_tab.png)
 
@@ -82,11 +88,13 @@ Her hisse için önceden tanımlı etiketler atayabilirsiniz:
 
 ---
 
-### 📥 CSV Dışa Aktarma
+### 📥 Dışa Aktarma
 - Bugünkü loglar veya seçili arşiv günü CSV olarak indirilebilir
 - "Tümünü İndir" ile tüm OPFS arşivi tek CSV'ye aktarılır
 - **UTF-16 LE + BOM** encoding — Excel'in tüm versiyonlarında Türkçe karakterler bozulmaz
-- Delimiter: `;` (Türkçe Excel varsayılanı)
+- Log CSV delimiter'ı: `;` (Türkçe Excel varsayılanı)
+- Not CSV çıktısı Excel uyumu için **UTF-16 LE + BOM** ve sekme ayracıyla üretilir
+- Not JSON çıktısı ham veri inceleme ve yedekleme için kullanılabilir
 - Meta blok (rapor adı, tarih aralığı, hisse sayısı) + veri satırları + hisse bazında özet
 
 ![CSV Export](screenshots/csv_export.png)
@@ -134,6 +142,7 @@ tvlogger-v3.1/
 └── src/
     ├── shared/
     │   ├── constants.js       # Storage anahtarları, OPFS yolları, aksiyonlar, etiketler
+    │   ├── strings.js         # Popup'ta kullanılan merkezi küçük UI metinleri
     │   ├── utils.js           # Fiyat normalizasyonu, süre formatı, HTML escape
     │   └── storage.js         # StorageManager — OPFS okuma/yazma/arşiv/migrasyon
     ├── content/
@@ -169,6 +178,7 @@ telegram-proxy/
 | Modül | Görev |
 |-------|-------|
 | `constants.js` | Global sabitler — tüm modüller bu dosyaya bağımlı |
+| `strings.js` | Popup içinde kullanılan merkezi UI metinleri |
 | `utils.js` | Paylaşılan yardımcı fonksiyonlar |
 | `detector.js` | DOM'dan sembol ve fiyat okuma |
 | `timer.js` | `Timer` modülü — sembol bazında oturum süresi |
@@ -190,7 +200,7 @@ telegram-proxy/
 | Sekme | Modül | İçerik |
 |-------|-------|--------|
 | Loglar | `logs.js` | Arama, aksiyon filtresi, sıralama, CSV indir |
-| Notlar | `notes.js` | Etiket editörü, not formu, tüm notlar listesi |
+| Notlar | `notes.js` | Çoklu yorumlar, yorum performansı, etiketler, hatırlatmalar, detay paneli, not export |
 | İstatistik | `stats.js` | Görüntülenme ve süre sıralaması, bugün özeti |
 | Arşiv | `archive.js` | Gün listesi + detay, toplu CSV, OPFS bilgisi |
 | Telegram | `telegram.js` | Endpoint URL, Chat ID, Client secret ayarları |
@@ -211,6 +221,14 @@ telegram-proxy/
 ## 📝 Changelog
 
 ### v3.1.0
+- 📝 Hisse başına çoklu yorum desteği
+- 📈 Yorum fiyat snapshot'ı ve güncel fiyata göre performans yüzdesi
+- 🧭 Hisse detay paneli
+- 🏷️ Yorum bazlı etiketler
+- 🔔 Tekrar bak hatırlatmaları ve kontrol edildi akışı
+- 📤 Notları CSV/JSON olarak dışa aktarma
+- 👁️ Popup yardımcı metinlerinde daha okunabilir kontrast
+- 🧩 Popup için merkezi küçük UI string dosyası
 - 🗄️ OPFS (Origin Private File System) ile sınırsız günlük arşiv
 - 📬 Cloudflare Worker üzerinden Telegram bildirimleri
 - ⏱️ Sembol başına inceleme süresi takibi (Timer modülü)
