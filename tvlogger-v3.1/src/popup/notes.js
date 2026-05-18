@@ -18,12 +18,19 @@ const NotesModule = (() => {
           if (!note) return null;
 
           const updatedAt = Number(item?.updatedAt || item?.createdAt || Date.now());
-          return {
+          const normalizedNote = {
             id: String(item?.id || `${updatedAt}-${Math.random().toString(36).slice(2, 8)}`),
             note,
             createdAt: Number(item?.createdAt || updatedAt),
             updatedAt,
           };
+
+          if (hasStoredPrice(item)) {
+            normalizedNote.priceAtNote = String(item?.priceAtNote || '').trim();
+            normalizedNote.priceAtNoteNumber = normalizeStoredPrice(item);
+          }
+
+          return normalizedNote;
         })
         .filter(Boolean);
 
@@ -35,6 +42,67 @@ const NotesModule = (() => {
 
   function getSymbolNotes(sym) {
     return Array.isArray(allNotes[sym]) ? allNotes[sym] : [];
+  }
+
+  function hasStoredPrice(item) {
+    return Boolean(
+      String(item?.priceAtNote || '').trim() ||
+      (item?.priceAtNoteNumber !== null && item?.priceAtNoteNumber !== undefined && item?.priceAtNoteNumber !== '')
+    );
+  }
+
+  function normalizeStoredPrice(item) {
+    const hasDirect = item?.priceAtNoteNumber !== null && item?.priceAtNoteNumber !== undefined && item?.priceAtNoteNumber !== '';
+    const direct = Number(item?.priceAtNoteNumber);
+    if (hasDirect && Number.isFinite(direct)) return direct;
+    const parsed = normalizePrice(item?.priceAtNote);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function getLivePriceSnapshot() {
+    const priceText = document.getElementById('livePrice')?.textContent.trim() || '';
+    const priceNumber = normalizePrice(priceText);
+    return {
+      priceAtNote: priceText,
+      priceAtNoteNumber: Number.isFinite(priceNumber) ? priceNumber : null,
+    };
+  }
+
+  function getCurrentPriceForSymbol(sym) {
+    const liveSymbol = document.getElementById('liveSymbol')?.textContent.trim();
+    if (!sym || liveSymbol !== sym) return { text: '', number: null };
+
+    const text = document.getElementById('livePrice')?.textContent.trim() || '';
+    const number = normalizePrice(text);
+    return { text, number: Number.isFinite(number) ? number : null };
+  }
+
+  function renderNotePerformance(sym, note) {
+    if (!note.priceAtNote || !Number.isFinite(note.priceAtNoteNumber)) {
+      return '<div class="note-performance muted">Fiyat kaydi yok</div>';
+    }
+
+    const current = getCurrentPriceForSymbol(sym);
+    if (!current.text || !Number.isFinite(current.number)) {
+      return `
+        <div class="note-performance muted">
+          <span>Yorum fiyati: ${escapeHtml(note.priceAtNote)}</span>
+          <span>Simdi: -</span>
+        </div>`;
+    }
+
+    const diffPct = note.priceAtNoteNumber > 0
+      ? ((current.number - note.priceAtNoteNumber) / note.priceAtNoteNumber) * 100
+      : 0;
+    const state = Math.abs(diffPct) < 0.01 ? 'flat' : (diffPct > 0 ? 'up' : 'down');
+    const sign = diffPct > 0 ? '+' : '';
+
+    return `
+      <div class="note-performance">
+        <span>Yorum fiyati: ${escapeHtml(note.priceAtNote)}</span>
+        <span>Simdi: ${escapeHtml(current.text)}</span>
+        <strong class="note-performance-change ${state}">${sign}%${diffPct.toFixed(2)}</strong>
+      </div>`;
   }
 
   function makeNoteId() {
@@ -145,6 +213,7 @@ const NotesModule = (() => {
             </div>
           </div>
           ${symTags ? `<div class="note-tag-chips">${symTags}</div>` : ''}
+          ${renderNotePerformance(sym, data)}
           <div class="note-card-text">${noteHtml}</div>
         </div>`;
     }).join('');
@@ -283,16 +352,17 @@ const NotesModule = (() => {
 
     const updatedAt = Date.now();
     const list = getSymbolNotes(sym);
+    const priceSnapshot = getLivePriceSnapshot();
 
     if (editingNoteRef?.symbol === sym) {
       const idx = list.findIndex(n => n.id === editingNoteRef.id);
       if (idx !== -1) {
         list[idx] = { ...list[idx], note: text, updatedAt };
       } else {
-        list.unshift({ id: makeNoteId(), note: text, createdAt: updatedAt, updatedAt });
+        list.unshift({ id: makeNoteId(), note: text, createdAt: updatedAt, updatedAt, ...priceSnapshot });
       }
     } else {
-      list.unshift({ id: makeNoteId(), note: text, createdAt: updatedAt, updatedAt });
+      list.unshift({ id: makeNoteId(), note: text, createdAt: updatedAt, updatedAt, ...priceSnapshot });
     }
 
     allNotes[sym] = list;
