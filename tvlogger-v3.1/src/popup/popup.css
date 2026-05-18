@@ -118,6 +118,14 @@ header h1 {
 .search-input-wrap:focus-within,
 .note-search-wrap:focus-within { border-color:var(--border-focus); }
 .note-search-wrap { margin-bottom:8px; }
+.note-export-row {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+.note-export-row .btn {
+  padding: 7px 10px;
+}
 .search-icon { font-size:13px; opacity:.55; flex-shrink:0; }
 .search-input-wrap input, .note-search-wrap input {
   flex:1; background:transparent; border:none; outline:none;

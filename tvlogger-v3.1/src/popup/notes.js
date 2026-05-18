@@ -688,5 +688,71 @@ const NotesModule = (() => {
     refreshCurrentNote();
   }
 
-  return { load, renderNotes, setActiveSymbol, refreshCurrentNote, save, clearNote };
+  function getExportRows() {
+    return Object.entries(allNotes).flatMap(([sym]) =>
+      getSymbolNotes(sym).map(note => {
+        const current = getCurrentPriceForSymbol(sym);
+        const performancePct = note.priceAtNoteNumber && current.number
+          ? (((current.number - note.priceAtNoteNumber) / note.priceAtNoteNumber) * 100).toFixed(2)
+          : '';
+
+        return {
+          symbol: sym,
+          note: note.note,
+          createdAt: note.createdAt ? new Date(note.createdAt).toISOString() : '',
+          updatedAt: note.updatedAt ? new Date(note.updatedAt).toISOString() : '',
+          reminderAt: note.reminderAt ? new Date(note.reminderAt).toISOString() : '',
+          priceAtNote: note.priceAtNote || '',
+          currentPrice: current.text || '',
+          performancePct,
+          stockTags: (allTags[sym] || []).join('|'),
+          noteTags: (note.tags || []).join('|'),
+        };
+      })
+    );
+  }
+
+  function exportNotes(format) {
+    const rows = getExportRows();
+    const date = dateKey();
+    if (format === 'json') {
+      downloadText(`tradingview-notes-${date}.json`, JSON.stringify(rows, null, 2), 'application/json');
+      return;
+    }
+
+    const headers = [
+      'symbol',
+      'note',
+      'createdAt',
+      'updatedAt',
+      'reminderAt',
+      'priceAtNote',
+      'currentPrice',
+      'performancePct',
+      'stockTags',
+      'noteTags',
+    ];
+    const csv = [
+      headers.join(';'),
+      ...rows.map(row => headers.map(key => csvCell(row[key])).join(';')),
+    ].join('\n');
+    downloadText(`tradingview-notes-${date}.csv`, csv, 'text/csv;charset=utf-8');
+  }
+
+  function csvCell(value) {
+    const text = String(value ?? '');
+    return /[;"\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }
+
+  function downloadText(filename, text, type) {
+    const blob = new Blob([text], { type });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  return { load, renderNotes, setActiveSymbol, refreshCurrentNote, save, clearNote, exportNotes };
 })();
