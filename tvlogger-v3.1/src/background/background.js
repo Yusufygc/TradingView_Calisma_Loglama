@@ -254,14 +254,17 @@ function buildTelegramLogSummary(title, logs, notes = {}, tags = {}) {
     ));
 
   const notedSymbolLines = Object.keys(bySymbol)
-    .filter(sym => notes[sym]?.note || tags[sym]?.length)
+    .filter(sym => hasNotesForSymbol(notes, sym) || tags[sym]?.length)
     .slice(0, 6)
     .map(sym => {
       const tagText = (tags[sym] || []).map(id => {
         const def = PREDEFINED_TAGS.find(t => t.id === id);
         return def ? def.label : id;
       }).join(', ');
-      return tagText ? `${sym}: ${tagText}` : sym;
+      const noteCount = getNotesForSymbol(notes, sym).length;
+      const noteText = noteCount ? `${noteCount} not` : '';
+      const suffix = [tagText, noteText].filter(Boolean).join(' - ');
+      return suffix ? `${sym}: ${suffix}` : sym;
     });
 
   const last = logs[logs.length - 1];
@@ -289,6 +292,16 @@ function buildTelegramLogSummary(title, logs, notes = {}, tags = {}) {
   }
 
   return lines.join('\n').slice(0, 3800);
+}
+
+function getNotesForSymbol(notes, sym) {
+  const value = notes?.[sym];
+  const list = Array.isArray(value) ? value : (value ? [value] : []);
+  return list.filter(n => String(n?.note ?? n?.text ?? '').trim());
+}
+
+function hasNotesForSymbol(notes, sym) {
+  return getNotesForSymbol(notes, sym).length > 0;
 }
 
 function buildTelegramNoteMessage(note) {

@@ -142,11 +142,16 @@ async function checkForExistingNote(symbol) {
     }
 
     // Not özeti
-    if (notes[symbol]) {
-      const noteText = notes[symbol].note;
+    const symbolNotes = Array.isArray(notes[symbol]) ? notes[symbol] : (notes[symbol] ? [notes[symbol]] : []);
+    const latestNote = symbolNotes
+      .filter(n => n?.note)
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    if (latestNote) {
+      const noteText = latestNote.note;
       const preview  = noteText.length > 90 ? noteText.substring(0, 90) + '…' : noteText;
       const escapedNote = preview.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      parts.push(`<div style="font-size:11px;color:#ffc107;margin-top:2px">📝 ${escapedNote}</div>`);
+      const countText = symbolNotes.length > 1 ? ` (${symbolNotes.length} not)` : '';
+      parts.push(`<div style="font-size:11px;color:#ffc107;margin-top:2px">📝${countText} ${escapedNote}</div>`);
     }
 
     showToast(`🔍 ${symbol}`, parts.join(''));

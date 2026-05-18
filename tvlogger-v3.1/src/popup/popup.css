@@ -245,7 +245,21 @@ header h1 {
 .note-card-text   { font-size:12px; color:var(--text-sec); line-height:1.55; word-break:break-word; }
 .note-card-text mark { background:rgba(255,193,7,.25); color:var(--warning); border-radius:2px; padding:0 1px; }
 .note-actions { display:flex; gap:4px; }
-.btn-icon { background:transparent; border:1px solid var(--border); border-radius:5px; padding:4px 8px; cursor:pointer; font-size:12px; transition:all var(--tr); }
+.btn-icon {
+  width: 30px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-dim);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  transition: all var(--tr);
+}
 .btn-icon:hover { background:var(--bg-secondary); border-color:var(--accent); }
 .btn-icon-danger:hover { background:var(--danger-dim); border-color:var(--danger); }
 .note-tag-chips { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px; }
