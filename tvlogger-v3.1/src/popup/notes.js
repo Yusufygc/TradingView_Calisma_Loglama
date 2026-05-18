@@ -105,6 +105,131 @@ const NotesModule = (() => {
       </div>`;
   }
 
+  function formatDetailDate(timestamp) {
+    if (!timestamp) return '-';
+    return new Date(timestamp).toLocaleString('tr-TR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  function renderDetailTags(sym) {
+    const tags = allTags[sym] || [];
+    if (!tags.length) return '<span class="stock-detail-muted">Etiket yok</span>';
+
+    return tags.map(id => {
+      const def = PREDEFINED_TAGS.find(t => t.id === id);
+      if (!def) return `<span class="note-tag-chip">${escapeHtml(id)}</span>`;
+      return `<span class="note-tag-chip" style="--tag-color:${def.color}">${def.label}</span>`;
+    }).join('');
+  }
+
+  function getRecentLogsForSymbol(logs, sym) {
+    return (logs || [])
+      .filter(log => log.symbol === sym || log.details?.sembol === sym || log.details?.yeni === sym)
+      .slice(-5)
+      .reverse();
+  }
+
+  function renderDetailLogs(logs) {
+    if (!logs.length) return '<p class="stock-detail-empty">Bugun log yok.</p>';
+
+    return logs.map(log => `
+      <div class="stock-detail-log">
+        <span>${escapeHtml(log.time || '-')}</span>
+        <strong>${escapeHtml(log.action || '-')}</strong>
+        <em>${escapeHtml(log.price || log.details?.fiyat || '-')}</em>
+      </div>
+    `).join('');
+  }
+
+  function renderDetailNotes(sym) {
+    const notes = getSymbolNotes(sym);
+    if (!notes.length) return '<p class="stock-detail-empty">Yorum yok.</p>';
+
+    return notes
+      .slice()
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+      .map(note => `
+        <div class="stock-detail-note">
+          <div class="stock-detail-note-date">${formatDetailDate(note.updatedAt)}</div>
+          ${renderNotePerformance(sym, note)}
+          <div>${escapeHtml(note.note)}</div>
+        </div>
+      `).join('');
+  }
+
+  async function openStockDetail(sym) {
+    const res = await chrome.storage.local.get([
+      STORAGE_KEYS.TIME_LOG,
+      STORAGE_KEYS.LAST_VIEWS,
+      STORAGE_KEYS.TODAY,
+    ]);
+    const timeLog = res[STORAGE_KEYS.TIME_LOG] || {};
+    const lastViews = res[STORAGE_KEYS.LAST_VIEWS] || {};
+    const todayLogs = res[STORAGE_KEYS.TODAY] || [];
+    const symbolTime = timeLog[sym] || {};
+    const lastView = lastViews[sym] || null;
+    const logs = getRecentLogsForSymbol(todayLogs, sym);
+
+    closeStockDetail();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'stock-detail-overlay';
+    overlay.innerHTML = `
+      <div class="stock-detail-panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(sym)} detay">
+        <div class="stock-detail-header">
+          <div>
+            <div class="stock-detail-symbol">${escapeHtml(sym)}</div>
+            <div class="stock-detail-subtitle">${getSymbolNotes(sym).length} yorum</div>
+          </div>
+          <button class="stock-detail-close" type="button" aria-label="Kapat">×</button>
+        </div>
+        <div class="stock-detail-grid">
+          <div class="stock-detail-stat">
+            <span>Toplam sure</span>
+            <strong>${formatDuration(symbolTime.totalMs || 0)}</strong>
+          </div>
+          <div class="stock-detail-stat">
+            <span>Seans</span>
+            <strong>${symbolTime.sessions || 0}</strong>
+          </div>
+          <div class="stock-detail-stat">
+            <span>Son fiyat</span>
+            <strong>${escapeHtml(lastView?.price || '-')}</strong>
+          </div>
+        </div>
+        <div class="stock-detail-section">
+          <h3>Son goruntuleme</h3>
+          <p>${lastView ? formatDetailDate(lastView.date) : '-'}</p>
+        </div>
+        <div class="stock-detail-section">
+          <h3>Etiketler</h3>
+          <div class="note-tag-chips">${renderDetailTags(sym)}</div>
+        </div>
+        <div class="stock-detail-section">
+          <h3>Yorumlar</h3>
+          ${renderDetailNotes(sym)}
+        </div>
+        <div class="stock-detail-section">
+          <h3>Bugunku son loglar</h3>
+          ${renderDetailLogs(logs)}
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay || e.target.closest('.stock-detail-close')) closeStockDetail();
+    });
+  }
+
+  function closeStockDetail() {
+    document.querySelector('.stock-detail-overlay')?.remove();
+  }
+
   function makeNoteId() {
     return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   }
@@ -203,7 +328,7 @@ const NotesModule = (() => {
       return `
         <div class="note-card" data-symbol="${escapeHtml(sym)}" data-note-id="${escapeHtml(data.id)}">
           <div class="note-card-header">
-            <span class="note-card-symbol">${symHtml}</span>
+            <button class="note-card-symbol note-symbol-detail-btn" type="button" data-symbol="${escapeHtml(sym)}" title="Hisse detayini ac">${symHtml}</button>
             <div style="display:flex;align-items:center;gap:8px">
               <span class="note-card-date">${dateStr}</span>
               <div class="note-actions">
@@ -240,6 +365,12 @@ const NotesModule = (() => {
         renderNotes(document.getElementById('noteSearch')?.value || '');
         renderTagFilterBar();
         if (window._currentSymbol === sym) refreshCurrentNote();
+      });
+    });
+
+    container.querySelectorAll('.note-symbol-detail-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        openStockDetail(e.currentTarget.dataset.symbol);
       });
     });
 
