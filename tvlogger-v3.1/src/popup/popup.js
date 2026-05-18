@@ -91,6 +91,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   $on('saveNote',   'click', NotesModule.save);
   $on('clearNote',  'click', NotesModule.clearNote);
+  $on('exportNotesCSV',  'click', () => NotesModule.exportNotes('csv'));
+  $on('exportNotesJSON', 'click', () => NotesModule.exportNotes('json'));
 
   // ── Archive tab eventleri ──────────────────────────
   $on('archiveSearch', 'input', e => {
