@@ -206,6 +206,7 @@ header h1 {
 /* ─── Tag Editor ─── */
 .tag-editor-wrap { margin-bottom:10px; }
 .tag-editor-label { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+.tag-editor-label-spaced { margin-top:9px; }
 .tag-editor-chips { display:flex; flex-wrap:wrap; gap:5px; }
 .tag-chip {
   background:var(--bg-input); border:1px solid var(--border);

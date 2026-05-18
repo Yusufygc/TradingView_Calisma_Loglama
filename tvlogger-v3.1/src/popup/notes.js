@@ -6,6 +6,15 @@ const NotesModule = (() => {
   let allTags = {}; // { PGSUS: ['buy','watchlist'], ... }
   let activeTagFilter = null;
   let editingNoteRef = null; // { symbol, id } | null
+  let draftNoteTags = [];
+
+  const NOTE_TAGS = [
+    { id: 'idea_buy', label: 'Alim fikri', color: '#4caf50' },
+    { id: 'risk', label: 'Risk', color: '#f44336' },
+    { id: 'technical', label: 'Teknik', color: '#4fc3f7' },
+    { id: 'news', label: 'Haber', color: '#ffc107' },
+    { id: 'followup', label: 'Takip', color: '#ab47bc' },
+  ];
 
   function normalizeNoteStore(notes) {
     const normalized = {};
@@ -23,6 +32,7 @@ const NotesModule = (() => {
             note,
             createdAt: Number(item?.createdAt || updatedAt),
             updatedAt,
+            tags: Array.isArray(item?.tags) ? item.tags.filter(Boolean) : [],
           };
 
           if (hasStoredPrice(item)) {
@@ -127,6 +137,14 @@ const NotesModule = (() => {
     }).join('');
   }
 
+  function renderNoteTagChips(tagIds) {
+    return (tagIds || []).map(id => {
+      const def = NOTE_TAGS.find(t => t.id === id);
+      if (!def) return '';
+      return `<span class="note-tag-chip" style="--tag-color:${def.color}">${def.label}</span>`;
+    }).join('');
+  }
+
   function getRecentLogsForSymbol(logs, sym) {
     return (logs || [])
       .filter(log => log.symbol === sym || log.details?.sembol === sym || log.details?.yeni === sym)
@@ -156,6 +174,7 @@ const NotesModule = (() => {
       .map(note => `
         <div class="stock-detail-note">
           <div class="stock-detail-note-date">${formatDetailDate(note.updatedAt)}</div>
+          ${renderNoteTagChips(note.tags || []) ? `<div class="note-tag-chips">${renderNoteTagChips(note.tags || [])}</div>` : ''}
           ${renderNotePerformance(sym, note)}
           <div>${escapeHtml(note.note)}</div>
         </div>
@@ -236,6 +255,7 @@ const NotesModule = (() => {
 
   function clearEditingState() {
     editingNoteRef = null;
+    draftNoteTags = [];
     document.getElementById('noteBadge')?.classList.remove('editing-note');
   }
 
@@ -261,17 +281,29 @@ const NotesModule = (() => {
     const bar = document.getElementById('tagFilterBar');
     if (!bar) return;
 
-    const usedTagIds = new Set(
+    const usedStockTagIds = new Set(
       Object.keys(allNotes)
         .filter(sym => getSymbolNotes(sym).length)
         .flatMap(sym => allTags[sym] || [])
     );
+    const usedNoteTagIds = new Set(
+      Object.values(allNotes)
+        .flat()
+        .flatMap(note => note.tags || [])
+    );
 
     bar.innerHTML = `
       <button class="tag-filter-btn ${activeTagFilter === null ? 'active' : ''}" data-tag="">Tumu</button>
-      ${PREDEFINED_TAGS.filter(t => usedTagIds.has(t.id)).map(t => `
-        <button class="tag-filter-btn ${activeTagFilter === t.id ? 'active' : ''}"
-                data-tag="${t.id}"
+      ${PREDEFINED_TAGS.filter(t => usedStockTagIds.has(t.id)).map(t => `
+        <button class="tag-filter-btn ${activeTagFilter === `stock:${t.id}` ? 'active' : ''}"
+                data-tag="stock:${t.id}"
+                style="--tag-color:${t.color}">
+          ${t.label}
+        </button>
+      `).join('')}
+      ${NOTE_TAGS.filter(t => usedNoteTagIds.has(t.id)).map(t => `
+        <button class="tag-filter-btn ${activeTagFilter === `note:${t.id}` ? 'active' : ''}"
+                data-tag="note:${t.id}"
                 style="--tag-color:${t.color}">
           ${t.label}
         </button>
@@ -296,8 +328,14 @@ const NotesModule = (() => {
       getSymbolNotes(sym).map(note => [sym, note])
     );
 
-    if (activeTagFilter) {
-      entries = entries.filter(([sym]) => (allTags[sym] || []).includes(activeTagFilter));
+    if (activeTagFilter?.startsWith('stock:')) {
+      const tagId = activeTagFilter.slice('stock:'.length);
+      entries = entries.filter(([sym]) => (allTags[sym] || []).includes(tagId));
+    }
+
+    if (activeTagFilter?.startsWith('note:')) {
+      const tagId = activeTagFilter.slice('note:'.length);
+      entries = entries.filter(([, data]) => (data.tags || []).includes(tagId));
     }
 
     if (query) {
@@ -324,6 +362,7 @@ const NotesModule = (() => {
         const def = PREDEFINED_TAGS.find(t => t.id === id);
         return def ? `<span class="note-tag-chip" style="--tag-color:${def.color}">${def.label}</span>` : '';
       }).join('');
+      const noteTags = renderNoteTagChips(data.tags || []);
 
       return `
         <div class="note-card" data-symbol="${escapeHtml(sym)}" data-note-id="${escapeHtml(data.id)}">
@@ -338,6 +377,7 @@ const NotesModule = (() => {
             </div>
           </div>
           ${symTags ? `<div class="note-tag-chips">${symTags}</div>` : ''}
+          ${noteTags ? `<div class="note-tag-chips">${noteTags}</div>` : ''}
           ${renderNotePerformance(sym, data)}
           <div class="note-card-text">${noteHtml}</div>
         </div>`;
@@ -397,6 +437,7 @@ const NotesModule = (() => {
       editingNoteRef = { symbol: sym, id: noteId };
       const note = getSymbolNotes(sym).find(n => n.id === noteId);
       if (input) input.value = note?.note || '';
+      draftNoteTags = [...(note?.tags || [])];
     } else {
       clearEditingState();
       if (input) input.value = '';
@@ -447,11 +488,21 @@ const NotesModule = (() => {
 
     const symTags = allTags[sym] || [];
     wrap.innerHTML = `
-      <div class="tag-editor-label">Etiketler:</div>
+      <div class="tag-editor-label">Hisse etiketleri:</div>
       <div class="tag-editor-chips">
         ${PREDEFINED_TAGS.map(t => `
           <button class="tag-chip ${symTags.includes(t.id) ? 'active' : ''}"
                   data-tag-id="${t.id}"
+                  style="--tag-color:${t.color}">
+            ${t.label}
+          </button>
+        `).join('')}
+      </div>
+      <div class="tag-editor-label tag-editor-label-spaced">Yorum etiketleri:</div>
+      <div class="tag-editor-chips note-tag-editor-chips">
+        ${NOTE_TAGS.map(t => `
+          <button class="tag-chip ${draftNoteTags.includes(t.id) ? 'active' : ''}"
+                  data-note-tag-id="${t.id}"
                   style="--tag-color:${t.color}">
             ${t.label}
           </button>
@@ -473,6 +524,16 @@ const NotesModule = (() => {
         renderNotes(document.getElementById('noteSearch')?.value || '');
       });
     });
+
+    wrap.querySelectorAll('.note-tag-editor-chips .tag-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tagId = btn.dataset.noteTagId;
+        const idx = draftNoteTags.indexOf(tagId);
+        if (idx === -1) draftNoteTags.push(tagId);
+        else draftNoteTags.splice(idx, 1);
+        renderTagEditor(sym);
+      });
+    });
   }
 
   async function save() {
@@ -488,12 +549,12 @@ const NotesModule = (() => {
     if (editingNoteRef?.symbol === sym) {
       const idx = list.findIndex(n => n.id === editingNoteRef.id);
       if (idx !== -1) {
-        list[idx] = { ...list[idx], note: text, updatedAt };
+        list[idx] = { ...list[idx], note: text, tags: [...draftNoteTags], updatedAt };
       } else {
-        list.unshift({ id: makeNoteId(), note: text, createdAt: updatedAt, updatedAt, ...priceSnapshot });
+        list.unshift({ id: makeNoteId(), note: text, tags: [...draftNoteTags], createdAt: updatedAt, updatedAt, ...priceSnapshot });
       }
     } else {
-      list.unshift({ id: makeNoteId(), note: text, createdAt: updatedAt, updatedAt, ...priceSnapshot });
+      list.unshift({ id: makeNoteId(), note: text, tags: [...draftNoteTags], createdAt: updatedAt, updatedAt, ...priceSnapshot });
     }
 
     allNotes[sym] = list;
