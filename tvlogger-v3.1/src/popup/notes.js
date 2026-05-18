@@ -766,20 +766,35 @@ const NotesModule = (() => {
       { key: 'noteTags', label: 'Yorum Etiketleri' },
     ];
     const csv = [
-      'sep=;',
-      columns.map(column => csvCell(column.label)).join(';'),
-      ...rows.map(row => columns.map(column => csvCell(row[column.key])).join(';')),
+      columns.map(column => tabularCell(column.label)).join('\t'),
+      ...rows.map(row => columns.map(column => tabularCell(row[column.key])).join('\t')),
     ].join('\r\n');
-    downloadText(`tradingview-notes-${date}.csv`, `\uFEFF${csv}`, 'text/csv;charset=utf-8');
+    downloadBytes(`tradingview-notes-${date}.csv`, toUtf16LeWithBom(csv), 'text/csv;charset=utf-16le');
   }
 
-  function csvCell(value) {
+  function tabularCell(value) {
     const text = String(value ?? '');
-    return /[;"\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    return /["\t\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }
+
+  function toUtf16LeWithBom(text) {
+    const bytes = new Uint8Array(2 + text.length * 2);
+    bytes[0] = 0xFF;
+    bytes[1] = 0xFE;
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      bytes[2 + i * 2] = code & 0xFF;
+      bytes[3 + i * 2] = code >> 8;
+    }
+    return bytes;
   }
 
   function downloadText(filename, text, type) {
-    const blob = new Blob([text], { type });
+    downloadBytes(filename, text, type);
+  }
+
+  function downloadBytes(filename, content, type) {
+    const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
