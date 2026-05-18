@@ -8,6 +8,7 @@ const NotesModule = (() => {
   let editingNoteRef = null; // { symbol, id } | null
   let draftNoteTags = [];
   let draftReminderAt = null;
+  const TEXT = UI_TEXT.notes;
 
   const NOTE_TAGS = [
     { id: 'idea_buy', label: 'Alim fikri', color: '#4caf50' },
@@ -91,15 +92,15 @@ const NotesModule = (() => {
 
   function renderNotePerformance(sym, note) {
     if (!note.priceAtNote || !Number.isFinite(note.priceAtNoteNumber)) {
-      return '<div class="note-performance muted">Fiyat kaydi yok</div>';
+      return `<div class="note-performance muted">${TEXT.missingPrice}</div>`;
     }
 
     const current = getCurrentPriceForSymbol(sym);
     if (!current.text || !Number.isFinite(current.number)) {
       return `
         <div class="note-performance muted">
-          <span>Yorum fiyati: ${escapeHtml(note.priceAtNote)}</span>
-          <span>Simdi: -</span>
+          <span>${TEXT.notePrice}: ${escapeHtml(note.priceAtNote)}</span>
+          <span>${TEXT.currentPrice}: -</span>
         </div>`;
     }
 
@@ -111,8 +112,8 @@ const NotesModule = (() => {
 
     return `
       <div class="note-performance">
-        <span>Yorum fiyati: ${escapeHtml(note.priceAtNote)}</span>
-        <span>Simdi: ${escapeHtml(current.text)}</span>
+        <span>${TEXT.notePrice}: ${escapeHtml(note.priceAtNote)}</span>
+        <span>${TEXT.currentPrice}: ${escapeHtml(current.text)}</span>
         <strong class="note-performance-change ${state}">${sign}%${diffPct.toFixed(2)}</strong>
       </div>`;
   }
@@ -152,7 +153,7 @@ const NotesModule = (() => {
 
   function renderReminderMeta(note) {
     if (!note.reminderAt) return '';
-    return `<div class="note-reminder-meta">Tekrar bak: ${formatDetailDate(note.reminderAt)}</div>`;
+    return `<div class="note-reminder-meta">${TEXT.reminderLabel} ${formatDetailDate(note.reminderAt)}</div>`;
   }
 
   function renderRemindersPanel() {
@@ -177,12 +178,12 @@ const NotesModule = (() => {
 
     panel.style.display = 'block';
     panel.innerHTML = `
-      <div class="due-reminders-title">Bugun kontrol edilecekler</div>
+      <div class="due-reminders-title">${TEXT.dueRemindersTitle}</div>
       <div class="due-reminders-list">
         ${due.map(([sym, note]) => `
           <div class="due-reminder-item" data-symbol="${escapeHtml(sym)}" data-note-id="${escapeHtml(note.id)}">
-            <label class="due-reminder-check" title="Kontrol edildi">
-              <input type="checkbox" aria-label="Hatirlatmayi tamamla">
+            <label class="due-reminder-check" title="${TEXT.completeReminderTitle}">
+              <input type="checkbox" aria-label="${TEXT.completeReminderAria}">
               <span></span>
             </label>
             <button class="due-reminder-open" type="button">
@@ -596,7 +597,7 @@ const NotesModule = (() => {
 
     const symTags = allTags[sym] || [];
     wrap.innerHTML = `
-      <div class="tag-editor-label">Hisse etiketleri:</div>
+      <div class="tag-editor-label">${TEXT.stockTagsLabel}</div>
       <div class="tag-editor-chips">
         ${PREDEFINED_TAGS.map(t => `
           <button class="tag-chip ${symTags.includes(t.id) ? 'active' : ''}"
@@ -606,7 +607,7 @@ const NotesModule = (() => {
           </button>
         `).join('')}
       </div>
-      <div class="tag-editor-label tag-editor-label-spaced">Yorum etiketleri:</div>
+      <div class="tag-editor-label tag-editor-label-spaced">${TEXT.noteTagsLabel}</div>
       <div class="tag-editor-chips note-tag-editor-chips">
         ${NOTE_TAGS.map(t => `
           <button class="tag-chip ${draftNoteTags.includes(t.id) ? 'active' : ''}"
@@ -616,7 +617,7 @@ const NotesModule = (() => {
           </button>
         `).join('')}
       </div>
-      <div class="tag-editor-label tag-editor-label-spaced">Tekrar bak:</div>
+      <div class="tag-editor-label tag-editor-label-spaced">${TEXT.reminderLabel}</div>
       <div class="tag-editor-chips note-reminder-editor">
         <button class="tag-chip ${draftReminderAt ? '' : 'active'}" data-reminder-days="">Yok</button>
         <button class="tag-chip ${isReminderDay(0) ? 'active' : ''}" data-reminder-days="0">Bugun</button>
